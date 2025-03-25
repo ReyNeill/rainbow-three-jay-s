@@ -123,15 +123,63 @@ export class WeaponSystem {
         // Show hit confirmation
         this.showHitConfirmation();
 
-        // Simple target effect - change color briefly
-        const originalColor = hitObject.material.color.clone();
-        hitObject.material.color.set(0xffffff);
+        // Get the target position for respawning later
+        const targetPosition = hitObject.position.clone();
 
-        setTimeout(() => {
-          hitObject.material.color.copy(originalColor);
-        }, 100);
+        // Create an explosion effect before removing the target
+        this.createTargetHitEffect(targetPosition);
+
+        // Remove target from scene and collidable objects
+        this.scene.remove(hitObject);
+        this.collidableObjects = this.collidableObjects.filter(
+          (obj) => obj !== hitObject
+        );
+
+        // Play target hit sound
+        if (this.shootSound && this.shootSound.buffer) {
+          // Clone the audio for multiple overlapping sounds
+          const hitSound = this.shootSound.clone();
+          hitSound.setVolume(0.3);
+          hitSound.play();
+        }
 
         console.log("Hit target!");
+
+        // Respawn target after 5 seconds
+        setTimeout(() => {
+          // Create new target
+          const targetGeometry = new THREE.SphereGeometry(0.7, 16, 16);
+          const targetMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+          });
+          const newTarget = new THREE.Mesh(targetGeometry, targetMaterial);
+
+          // Set position to the original target position
+          newTarget.position.copy(targetPosition);
+
+          // Add userData for hit detection
+          newTarget.userData.isTarget = true;
+
+          // Add to scene and collidable objects
+          this.scene.add(newTarget);
+          this.collidableObjects.push(newTarget);
+
+          // Create a ring around the new target for better visibility
+          const ringGeometry = new THREE.TorusGeometry(0.8, 0.1, 8, 16);
+          const ringMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.7,
+          });
+          const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+          ring.rotation.x = Math.PI / 2; // Make it face the player
+          ring.position.copy(targetPosition);
+          this.scene.add(ring);
+
+          // Create a visual effect for respawning
+          this.createRespawnEffect(targetPosition);
+        }, 5000); // 5 seconds
+
         return;
       }
 
@@ -214,6 +262,157 @@ export class WeaponSystem {
       geometry.dispose();
       material.dispose();
     }, 200);
+  }
+
+  createTargetHitEffect(position) {
+    // Create a particle explosion effect for target hit
+    const geometry = new THREE.SphereGeometry(0.1, 8, 8);
+    const materials = [
+      new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true }), // Red
+      new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true }), // Orange
+      new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true }), // Yellow
+    ];
+
+    // Create multiple particles
+    for (let i = 0; i < 15; i++) {
+      // Randomly select a material
+      const material =
+        materials[Math.floor(Math.random() * materials.length)].clone();
+      const particle = new THREE.Mesh(geometry, material);
+
+      // Set initial position at the target center
+      particle.position.copy(position);
+
+      // Random velocity direction
+      const velocity = new THREE.Vector3(
+        Math.random() * 2 - 1,
+        Math.random() * 2 - 1,
+        Math.random() * 2 - 1
+      )
+        .normalize()
+        .multiplyScalar(0.1 + Math.random() * 0.2);
+
+      this.scene.add(particle);
+
+      // Animate the particle
+      const startTime = Date.now();
+      const duration = 300 + Math.random() * 200; // 300-500ms duration
+
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+
+        if (progress >= 1) {
+          // Remove particle when animation is complete
+          this.scene.remove(particle);
+          return;
+        }
+
+        // Move outward
+        particle.position.add(velocity);
+
+        // Fade out
+        particle.material.opacity = 1 - progress;
+
+        // Continue animation
+        requestAnimationFrame(animate);
+      };
+
+      // Start animation
+      animate();
+    }
+
+    // Add a flash at the hit point
+    const flashGeometry = new THREE.SphereGeometry(0.7, 16, 16);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.8,
+    });
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    flash.position.copy(position);
+    this.scene.add(flash);
+
+    // Animate the flash
+    const flashStartTime = Date.now();
+    const flashDuration = 200;
+
+    const animateFlash = () => {
+      const elapsed = Date.now() - flashStartTime;
+      const progress = elapsed / flashDuration;
+
+      if (progress >= 1) {
+        // Remove flash when animation is complete
+        this.scene.remove(flash);
+        flashGeometry.dispose();
+        flashMaterial.dispose();
+        return;
+      }
+
+      // Expand and fade out
+      const scale = 1 + progress;
+      flash.scale.set(scale, scale, scale);
+      flash.material.opacity = 0.8 * (1 - progress);
+
+      // Continue animation
+      requestAnimationFrame(animateFlash);
+    };
+
+    // Start flash animation
+    animateFlash();
+  }
+
+  createRespawnEffect(position) {
+    // Create a particle effect for target respawn
+    const geometry = new THREE.SphereGeometry(0.1, 8, 8);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x00ffff,
+      transparent: true,
+      opacity: 0.8,
+    });
+
+    // Create multiple particles
+    for (let i = 0; i < 10; i++) {
+      const particle = new THREE.Mesh(geometry, material.clone());
+
+      // Random position around the target
+      const offset = new THREE.Vector3(
+        Math.random() * 2 - 1,
+        Math.random() * 2 - 1,
+        Math.random() * 2 - 1
+      );
+
+      particle.position.copy(position).add(offset.multiplyScalar(0.5));
+      this.scene.add(particle);
+
+      // Animate the particle
+      const startTime = Date.now();
+      const duration = 500 + Math.random() * 500; // 500-1000ms duration
+
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+
+        if (progress >= 1) {
+          // Remove particle when animation is complete
+          this.scene.remove(particle);
+          geometry.dispose();
+          material.dispose();
+          return;
+        }
+
+        // Scale up and fade out
+        const scale = 1 + progress * 3;
+        particle.scale.set(scale, scale, scale);
+        particle.material.opacity = 0.8 * (1 - progress);
+
+        // Continue animation
+        requestAnimationFrame(animate);
+      };
+
+      // Start animation
+      animate();
+    }
   }
 
   update() {
