@@ -3,9 +3,10 @@ import { io } from "socket.io-client";
 import { PlayerController } from "./components/PlayerController.js";
 import { GameMap } from "./components/GameMap.js";
 import { OtherPlayers } from "./components/OtherPlayers.js";
-import { Crosshair } from "./components/Crosshair.js";
 import { WeaponSystem } from "./components/WeaponSystem.js";
 import { DummyPlayer } from "./components/DummyPlayer.js";
+import { InputManager } from "./managers/InputManager.js";
+import { UIManager } from "./managers/UIManager.js";
 
 // Initialize the scene
 const scene = new THREE.Scene();
@@ -47,19 +48,22 @@ scene.add(directionalLight);
 // Create game map
 const gameMap = new GameMap(scene);
 
-// Initialize player controller with collidable objects
+// Initialize managers
+const inputManager = new InputManager(renderer.domElement);
+const uiManager = new UIManager();
+
+// Initialize player controller with managers AND scene
 const playerController = new PlayerController(
   camera,
   renderer.domElement,
-  gameMap.getCollidableObjects()
+  gameMap.getCollidableObjects(),
+  inputManager,
+  uiManager,
+  scene // Pass scene reference
 );
 
 // Initialize other players manager
 const otherPlayers = new OtherPlayers(scene);
-
-// Initialize crosshair
-const crosshair = new Crosshair();
-crosshair.hide(); // Hidden until pointer is locked
 
 // Create dummy player for target practice
 // Position the dummy player directly in front of starting position
@@ -81,27 +85,19 @@ playerController.setCollidableObjects([
 // Socket.io connection
 const socket = io();
 
-// Initialize weapon system with collidable objects and socket
+// Initialize weapon system with managers
 const weaponSystem = new WeaponSystem(
   scene,
   camera,
-  [...gameMap.getCollidableObjects(), ...otherPlayers.getPlayerObjects()],
-  socket
+  [],
+  socket,
+  inputManager,
+  uiManager,
+  dummyPlayer
 );
 
 // Pass the target instances to weapon system
 weaponSystem.targets = gameMap.getTargets();
-
-// Set the dummy players for the weapon system
-weaponSystem.setDummyPlayer(dummyPlayer);
-// Add the second dummy player's meshes to the weapon system
-if (dummyPlayer2) {
-  const dummyMeshes = dummyPlayer2.getMeshes();
-  weaponSystem.collidableObjects = [
-    ...weaponSystem.collidableObjects,
-    ...dummyMeshes,
-  ];
-}
 
 // Sync function to ensure weapon system and player controller have the same collidable objects
 function syncCollidableObjects() {
@@ -110,7 +106,7 @@ function syncCollidableObjects() {
     ...gameMap.getCollidableObjects(),
     ...otherPlayers.getPlayerObjects(),
     ...dummyPlayer.getMeshes(),
-    ...dummyPlayer2.getMeshes(),
+    ...(dummyPlayer2 ? dummyPlayer2.getMeshes() : []),
   ];
 
   // Update both systems
@@ -131,13 +127,10 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
 });
 
-// Manage crosshair visibility based on pointer lock
+// Manage UI visibility based on pointer lock using UIManager
 document.addEventListener("pointerlockchange", () => {
-  if (document.pointerLockElement === renderer.domElement) {
-    crosshair.show();
-  } else {
-    crosshair.hide();
-  }
+  const isLocked = document.pointerLockElement === renderer.domElement;
+  uiManager.handlePointerLockChange(isLocked);
 });
 
 // Socket.io event handlers
@@ -217,20 +210,7 @@ socket.on("playerHit", (data) => {
   console.log(`Hit by player ${data.shooterId} for ${data.damage} damage`);
 
   // Flash screen red when hit
-  const hitOverlay = document.createElement("div");
-  hitOverlay.style.position = "absolute";
-  hitOverlay.style.top = "0";
-  hitOverlay.style.left = "0";
-  hitOverlay.style.width = "100%";
-  hitOverlay.style.height = "100%";
-  hitOverlay.style.backgroundColor = "rgba(255, 0, 0, 0.3)";
-  hitOverlay.style.pointerEvents = "none";
-  document.body.appendChild(hitOverlay);
-
-  // Remove after a short time
-  setTimeout(() => {
-    document.body.removeChild(hitOverlay);
-  }, 200);
+  uiManager.showHitOverlay();
 });
 
 // Handle hit confirmation when player successfully hits another player
@@ -239,23 +219,7 @@ socket.on("hitConfirmed", (data) => {
   console.log(`Hit player ${data.targetId} for ${data.damage} damage`);
 
   // Show simple hit marker in center of screen
-  const hitMarker = document.createElement("div");
-  hitMarker.style.position = "absolute";
-  hitMarker.style.top = "50%";
-  hitMarker.style.left = "50%";
-  hitMarker.style.transform = "translate(-50%, -50%)";
-  hitMarker.style.width = "20px";
-  hitMarker.style.height = "20px";
-  hitMarker.style.backgroundImage =
-    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M10 0 L10 20 M0 10 L20 10' stroke='white' stroke-width='2'/%3E%3C/svg%3E\")";
-  hitMarker.style.backgroundSize = "contain";
-  hitMarker.style.pointerEvents = "none";
-  document.body.appendChild(hitMarker);
-
-  // Remove after a short time
-  setTimeout(() => {
-    document.body.removeChild(hitMarker);
-  }, 100);
+  uiManager.showHitMarker();
 
   // Update the target's health in the OtherPlayers component for visual feedback
   if (otherPlayers.players[data.targetId]) {
@@ -272,29 +236,6 @@ socket.on("hitConfirmed", (data) => {
     otherPlayers.showHitEffect(data.targetId);
   }
 });
-
-// Add helper text for testing shooting mechanics
-const testingInstructions = document.createElement("div");
-testingInstructions.style.position = "absolute";
-testingInstructions.style.top = "20px";
-testingInstructions.style.left = "20px";
-testingInstructions.style.color = "white";
-testingInstructions.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
-testingInstructions.style.padding = "10px";
-testingInstructions.style.borderRadius = "5px";
-testingInstructions.style.fontWeight = "bold";
-testingInstructions.style.fontSize = "16px";
-testingInstructions.style.zIndex = "1000";
-testingInstructions.innerHTML = `
-  <h3 style="color: #ff9900; margin: 0 0 10px 0;">Shooting Test Arena</h3>
-  <p>- Look for the <span style="color: yellow;">YELLOW</span> dummy players</p>
-  <p>- Try to hit the <span style="color: red;">RED</span> moving targets - they respawn after 5 seconds</p>
-  <p>- Click to lock pointer and enable shooting</p>
-  <p>- WASD to move, Space to vault over obstacles</p>
-  <p>- Q/E to lean left/right</p>
-  <p>- Left-click to shoot targets and dummies</p>
-`;
-document.body.appendChild(testingInstructions);
 
 // Game loop variables
 let lastTime = 0;
@@ -313,11 +254,14 @@ function animate(time) {
   // Update moving targets
   gameMap.updateTargets(deltaTime);
 
-  // Update weapon system if needed
+  // Update weapon system
   weaponSystem.update();
 
   // Render the scene
   renderer.render(scene, camera);
+
+  // Update Input Manager (call at the end of the frame)
+  inputManager.update();
 }
 
 animate(0);

@@ -7,12 +7,16 @@ export class WeaponSystem {
     camera,
     collidableObjects = [],
     socket,
+    inputManager,
+    uiManager,
     dummyPlayer = null
   ) {
     this.scene = scene;
     this.camera = camera;
     this.collidableObjects = collidableObjects;
     this.socket = socket;
+    this.inputManager = inputManager;
+    this.uiManager = uiManager;
     this.dummyPlayer = dummyPlayer;
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(0, 0); // Center of screen
@@ -44,7 +48,7 @@ export class WeaponSystem {
       if (event.button === 0) {
         // Left mouse button
         this.shooting = true;
-        this.shoot();
+        this.triggerShoot();
       }
     });
 
@@ -70,15 +74,14 @@ export class WeaponSystem {
     }
   }
 
-  shoot() {
-    if (this.cooldown) return;
+  triggerShoot() {
+    if (this.cooldown || !this.inputManager.getIsPointerLocked()) return;
 
-    // Set cooldown
     this.cooldown = true;
     setTimeout(() => {
       this.cooldown = false;
-      if (this.shooting) {
-        this.shoot(); // Continue shooting if button is held down
+      if (this.inputManager.isActionActive("shoot")) {
+        this.triggerShoot();
       }
     }, this.cooldownTime);
 
@@ -93,11 +96,15 @@ export class WeaponSystem {
     // Create muzzle flash visual effect (simple implementation)
     this.createMuzzleFlash();
 
-    // Perform raycasting from camera center
-    this.raycaster.setFromCamera(this.mouse, this.camera);
+    this.performRaycast();
+  }
 
-    // Check for intersections with objects and players
-    const intersects = this.raycaster.intersectObjects(this.collidableObjects);
+  performRaycast() {
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const intersects = this.raycaster.intersectObjects(
+      this.collidableObjects,
+      true
+    );
 
     if (intersects.length > 0) {
       const hit = intersects[0];
@@ -108,22 +115,19 @@ export class WeaponSystem {
       // Check if we hit a player (by checking parent or userData)
       const hitObject = hit.object;
 
+      let hitConfirmed = false;
+
       // Handle dummy player hit
       if (this.dummyPlayer && hitObject.userData.playerId === "dummy") {
         this.dummyPlayer.hit(25); // Apply damage to dummy
-
-        // Show hit confirmation
-        this.showHitConfirmation();
-
+        hitConfirmed = true;
         console.log("Hit dummy player!");
         return;
       }
 
       // Handle target hit
       if (hitObject.userData.isTarget) {
-        // Show hit confirmation
-        this.showHitConfirmation();
-
+        hitConfirmed = true;
         // Get the target position for respawning later
         const targetPosition = hitObject.position.clone();
 
@@ -174,6 +178,12 @@ export class WeaponSystem {
           targetId: hitObject.userData.playerId,
           damage: 25, // Basic damage amount
         });
+        console.log("Shot player:", hitObject.userData.playerId);
+      }
+
+      // Show UI hit marker if it wasn't another player
+      if (hitConfirmed && this.uiManager) {
+        this.uiManager.showHitMarker();
       }
     }
   }
@@ -182,27 +192,6 @@ export class WeaponSystem {
   findTargetByMesh(mesh) {
     if (!this.targets) return null;
     return this.targets.find((target) => target.getMesh() === mesh);
-  }
-
-  showHitConfirmation() {
-    // Show simple hit marker in center of screen
-    const hitMarker = document.createElement("div");
-    hitMarker.style.position = "absolute";
-    hitMarker.style.top = "50%";
-    hitMarker.style.left = "50%";
-    hitMarker.style.transform = "translate(-50%, -50%)";
-    hitMarker.style.width = "20px";
-    hitMarker.style.height = "20px";
-    hitMarker.style.backgroundImage =
-      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M10 0 L10 20 M0 10 L20 10' stroke='white' stroke-width='2'/%3E%3C/svg%3E\")";
-    hitMarker.style.backgroundSize = "contain";
-    hitMarker.style.pointerEvents = "none";
-    document.body.appendChild(hitMarker);
-
-    // Remove after short time
-    setTimeout(() => {
-      document.body.removeChild(hitMarker);
-    }, 100);
   }
 
   createMuzzleFlash() {
@@ -255,6 +244,14 @@ export class WeaponSystem {
   }
 
   update() {
-    // Can be used for continuous updates if needed
+    // Check for shoot action press/hold
+    if (this.inputManager.isActionPressed("shoot")) {
+      this.triggerShoot();
+    }
+    // If continuous fire is desired while holding:
+    // (Already handled by the setTimeout logic in triggerShoot)
+    // else if (this.inputManager.isActionActive("shoot")) {
+    //   // Potentially trigger continuous fire logic if needed
+    // }
   }
 }
