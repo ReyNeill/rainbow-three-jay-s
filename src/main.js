@@ -271,7 +271,7 @@ testingInstructions.innerHTML = `
   <p>- Look for the <span style="color: yellow;">YELLOW</span> dummy players</p>
   <p>- Try to hit the <span style="color: red;">RED</span> moving targets - they respawn after 5 seconds</p>
   <p>- Click to lock pointer and enable shooting</p>
-  <p>- WASD to move, Space to jump</p>
+  <p>- WASD to move, Space to vault over obstacles</p>
   <p>- Q/E to lean left/right</p>
   <p>- Left-click to shoot targets and dummies</p>
 `;

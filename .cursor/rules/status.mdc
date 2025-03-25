@@ -1,0 +1,78 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+ # Rainbow Three Jay's - Project Status
+
+## Current Development Status
+
+The game is currently in the early stages of development, transitioning from Phase 3 (Lean Mechanics) to Phase 4 (Shooting Mechanics). We have implemented several core features and are focusing on creating a solid foundation for gameplay mechanics.
+
+### Implemented Features
+
+#### Core Systems
+- **Rendering**: Basic Three.js scene setup with proper camera positioning
+- **Player Controller**: First-person movement with WASD controls
+- **Collision Detection**: Multi-height raycasting system preventing movement through obstacles
+- **Leaning System**: Q/E keys toggle left/right lean with smooth transitions
+- **Vaulting System**: Space key triggers vaults over appropriate obstacles with visual prompts
+- **Shooting Mechanics**: Basic shooting with hit detection and visual feedback
+- **Sound Effects**: Audio feedback for shooting and environment interactions
+
+#### Game Environment
+- **Game Map**: Simple test environment with different areas:
+  - Target shooting range with moving targets
+  - Structured obstacle course for testing vaulting
+  - Dummy player models for shooting practice
+- **Vaultable Objects**: Three standardized types of obstacles:
+  - Mini Tables (0.5 height) - Blue
+  - Tables (0.8 height) - Green
+  - Half Walls (1.2 height) - Red
+- **Visual Elements**: On-screen indicators, crosshairs, and vault prompts
+
+#### Object Models
+- **PlayerModel**: Base model for all player-type entities
+- **DummyModel**: Target dummy extending the player model
+- **TargetModel**: Moving targets with hit effects and respawn functionality
+- **MiniTableModel**: Low vaultable obstacles (height 0.5)
+- **TableModel**: Medium vaultable obstacles (height 0.8)
+- **HalfWallModel**: Tall vaultable obstacles (height 1.2)
+
+### Recent Improvements
+- Implemented proper collision detection with varying heights
+- Created separate model classes for vaultable objects
+- Improved vaulting detection with multiple raycasts
+- Added visual labels and indicators for testing and debugging
+- Replaced generic obstacles with standardized vaultable types
+- Added proper visual feedback for vaulting interactions
+- Removed unnecessary graphical elements (rings around objects)
+
+### Current Focus Areas
+- Refining collision and vaulting mechanics
+- Standardizing object types for consistent player interactions
+- Implementing proper visual feedback for all player actions
+- Ensuring stable gameplay foundation before adding multiplayer features
+
+### Next Steps
+- Complete shooting mechanics implementation (Phase 4)
+- Begin network implementation (Phase 5)
+- Design more complex map layouts (Phase 6)
+- Implement team mechanics (Phase 7)
+
+## Technical Highlights
+
+### Collision Detection System
+The collision detection system uses multi-height raycasting to detect obstacles at different heights, preventing players from passing through obstacles that are above a certain height threshold.
+
+### Vaulting System
+The vaulting mechanic allows players to vault over obstacles of appropriate height:
+- Mini Tables (0.5 height) - Lowest vaultable obstacles
+- Tables (0.8 height) - Medium vaultable obstacles
+- Half Walls (1.2 height) - Tallest vaultable obstacles
+- Objects over 1.5 height are not vaultable
+
+The system uses a combination of raycasting and height checks to determine if an object can be vaulted, and provides visual feedback with a floating prompt when vaulting is possible.
+
+### Object Model System
+The game uses a component-based approach with separate model classes for different object types, making it easy to create and manage consistent objects throughout the game world.

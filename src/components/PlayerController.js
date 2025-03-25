@@ -25,11 +25,25 @@ export class PlayerController {
     this.direction = new THREE.Vector3();
     this.moveSpeed = 100.0; // Units per second
 
-    // Gravity and jumping
+    // Gravity and ground state
     this.gravity = 9.8 * 10; // Gravity constant (multiplied for better effect)
     this.isOnGround = true;
     this.floorHeight = 2; // Player eye height (camera is at y=2)
-    this.jumpVelocity = 10; // Initial jump velocity
+
+    // Vaulting properties
+    this.canVault = false;
+    this.isVaulting = false;
+    this.vaultTarget = null;
+    this.vaultHeight = 0;
+    this.vaultDuration = 0.4; // seconds
+    this.vaultTimer = 0;
+    this.vaultPromptElement = null;
+    this.playerHeight = 2.0; // Player height (same as floorHeight)
+    this.vaultDistance = 1.5; // Increased from 1.2 to better detect objects
+    this.vaultMaxHeight = 1.7; // Increased from 1.5 to better accommodate Half Walls (1.2 height)
+    this.vaultMinHeight = 0.3; // Reduced to allow vaulting shorter objects
+    this.lastVaultCheckTime = 0;
+    this.vaultCheckInterval = 0.2; // Check for vaultable objects every 0.2 seconds
 
     // Camera position tracking
     this.cameraOffset = new THREE.Vector3();
@@ -51,6 +65,61 @@ export class PlayerController {
 
     // Instruction text
     this.showInstructions();
+
+    // Create vault prompt
+    this.createVaultPrompt();
+  }
+
+  createVaultPrompt() {
+    this.vaultPromptElement = document.createElement("div");
+    this.vaultPromptElement.id = "vault-prompt";
+    this.vaultPromptElement.style.position = "absolute";
+    this.vaultPromptElement.style.bottom = "30%";
+    this.vaultPromptElement.style.left = "50%";
+    this.vaultPromptElement.style.transform = "translateX(-50%)";
+    this.vaultPromptElement.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+    this.vaultPromptElement.style.color = "white";
+    this.vaultPromptElement.style.padding = "12px 20px";
+    this.vaultPromptElement.style.borderRadius = "5px";
+    this.vaultPromptElement.style.fontWeight = "bold";
+    this.vaultPromptElement.style.fontSize = "18px";
+    this.vaultPromptElement.style.display = "none";
+    this.vaultPromptElement.style.border = "2px solid white";
+    this.vaultPromptElement.style.textAlign = "center";
+    this.vaultPromptElement.style.boxShadow = "0 0 10px rgba(0,0,0,0.5)";
+    this.vaultPromptElement.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: center;">
+        <div style="font-size: 24px; margin-right: 8px;">↑</div>
+        <div>Press <span style="color: #ff9900; font-size: 20px;">[SPACE]</span> to Vault</div>
+      </div>
+    `;
+    document.body.appendChild(this.vaultPromptElement);
+
+    // Add animation
+    this.vaultPromptElement.style.animation = "pulse 1.5s infinite ease-in-out";
+
+    // Add keyframes for the animation
+    const style = document.createElement("style");
+    style.innerHTML = `
+      @keyframes pulse {
+        0% { transform: translateX(-50%) scale(1); }
+        50% { transform: translateX(-50%) scale(1.05); }
+        100% { transform: translateX(-50%) scale(1); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  showVaultPrompt() {
+    if (this.vaultPromptElement) {
+      this.vaultPromptElement.style.display = "block";
+    }
+  }
+
+  hideVaultPrompt() {
+    if (this.vaultPromptElement) {
+      this.vaultPromptElement.style.display = "none";
+    }
   }
 
   setupEventListeners() {
@@ -68,6 +137,7 @@ export class PlayerController {
       if (document.pointerLockElement === this.domElement) {
         this.hideInstructions();
       } else {
+        this.hideVaultPrompt();
         this.showInstructions();
       }
     });
@@ -88,7 +158,7 @@ export class PlayerController {
       instructions.style.padding = "1em";
       instructions.style.borderRadius = "5px";
       instructions.innerHTML =
-        "<p>Click to play</p><p>Move: WASD<br>Look: Mouse<br>Lean: Q/E<br>Jump: Space</p>";
+        "<p>Click to play</p><p>Move: WASD<br>Look: Mouse<br>Lean: Q/E<br>Vault: Space</p>";
       document.body.appendChild(instructions);
     }
     instructions.style.display = "block";
@@ -142,13 +212,220 @@ export class PlayerController {
         }
         break;
       case "Space":
-        // Jump only if we're on the ground
-        if (this.isOnGround) {
-          this.velocity.y = this.jumpVelocity;
-          this.isOnGround = false;
+        // Only initiate vault if we're properly showing the prompt
+        if (
+          this.canVault &&
+          !this.isVaulting &&
+          this.vaultPromptElement &&
+          this.vaultPromptElement.style.display === "block"
+        ) {
+          this.startVault();
         }
         break;
     }
+  }
+
+  startVault() {
+    if (!this.vaultTarget) return;
+
+    this.isVaulting = true;
+    this.vaultTimer = 0;
+    this.hideVaultPrompt();
+
+    // Store initial position and target position
+    this.vaultStartPosition = this.truePosition.clone();
+    this.vaultEndPosition = new THREE.Vector3(
+      this.vaultTarget.x,
+      this.vaultTarget.y,
+      this.vaultTarget.z
+    );
+
+    // Disable player control during vault
+    this.moveForward = false;
+    this.moveBackward = false;
+    this.moveLeft = false;
+    this.moveRight = false;
+  }
+
+  updateVault(deltaTime) {
+    if (!this.isVaulting) return;
+
+    this.vaultTimer += deltaTime;
+    const progress = Math.min(1.0, this.vaultTimer / this.vaultDuration);
+
+    if (progress < 1.0) {
+      // Bezier curve for smooth vault motion
+      const t = progress;
+      const oneMinusT = 1 - t;
+
+      // Start position
+      const p0 = this.vaultStartPosition;
+
+      // Control point slightly above target
+      const p1 = new THREE.Vector3(
+        (p0.x + this.vaultEndPosition.x) / 2,
+        Math.max(p0.y, this.vaultEndPosition.y) + 0.5,
+        (p0.z + this.vaultEndPosition.z) / 2
+      );
+
+      // End position
+      const p2 = this.vaultEndPosition;
+
+      // Quadratic bezier formula: (1-t)²P₀ + 2(1-t)tP₁ + t²P₂
+      this.truePosition.x =
+        oneMinusT * oneMinusT * p0.x + 2 * oneMinusT * t * p1.x + t * t * p2.x;
+      this.truePosition.y =
+        oneMinusT * oneMinusT * p0.y + 2 * oneMinusT * t * p1.y + t * t * p2.y;
+      this.truePosition.z =
+        oneMinusT * oneMinusT * p0.z + 2 * oneMinusT * t * p1.z + t * t * p2.z;
+    } else {
+      // Complete the vault
+      this.truePosition.copy(this.vaultEndPosition);
+      this.isVaulting = false;
+      this.velocity.set(0, 0, 0);
+    }
+  }
+
+  checkForVaultableObjects() {
+    if (this.isVaulting) return;
+
+    // Only check if we're on the ground
+    if (!this.isOnGround) {
+      this.canVault = false;
+      this.hideVaultPrompt();
+      return;
+    }
+
+    // Create a raycaster pointing in the direction the player is facing
+    const raycaster = new THREE.Raycaster();
+
+    // Get the direction the player is facing (from camera)
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyQuaternion(this.camera.quaternion);
+
+    // Zero out the Y component and normalize
+    direction.y = 0;
+    if (direction.length() > 0) direction.normalize();
+
+    // Try multiple rays at different heights to better detect vaultable objects
+    const rayHeights = [
+      -0.3, // Upper body
+      -0.8, // Waist level
+      -1.3, // Knee level
+    ];
+
+    this.canVault = false;
+
+    // Check at multiple heights
+    for (const rayOffset of rayHeights) {
+      // Start position is at player position, adjusted for height
+      const startPos = this.truePosition.clone();
+      startPos.y += rayOffset;
+      raycaster.set(startPos, direction);
+
+      // Check for intersections with collidable objects
+      const intersects = raycaster.intersectObjects(
+        this.collisionDetection.objects
+      );
+
+      if (intersects.length > 0) {
+        const hit = intersects[0];
+
+        // Only consider objects within vaultDistance
+        if (hit.distance < this.vaultDistance) {
+          // Get the object
+          const object = hit.object;
+
+          // Safely determine object height - Different geometries store dimensions differently
+          let objectHeight = 0;
+          let objectTop = 0;
+
+          if (object.geometry.type === "BoxGeometry") {
+            // For box geometries
+            objectHeight = object.geometry.parameters.height;
+            objectTop = object.position.y + objectHeight / 2;
+          } else if (object.geometry.type === "PlaneGeometry") {
+            // For plane geometries (like the floor)
+            objectTop = object.position.y;
+            objectHeight = 0.1; // Minimal height for planes
+          } else {
+            // For other geometries, use bounding box
+            if (!object.geometry.boundingBox) {
+              object.geometry.computeBoundingBox();
+            }
+            const boundingBox = object.geometry.boundingBox;
+            objectHeight = boundingBox.max.y - boundingBox.min.y;
+            objectTop = object.position.y + objectHeight / 2;
+          }
+
+          // Calculate height from feet and center
+          const heightFromFeet =
+            objectTop - (this.truePosition.y - this.playerHeight / 2);
+          const heightDifference = objectTop - this.truePosition.y;
+
+          // Debug: log vault information
+          console.log(
+            `[Ray at ${rayOffset}] Object ${
+              object.userData.name || ""
+            } at ${object.position.y.toFixed(2)}, h:${objectHeight.toFixed(
+              2
+            )}, ` +
+              `top:${objectTop.toFixed(2)}, diff:${heightDifference.toFixed(
+                2
+              )}, fromFeet:${heightFromFeet.toFixed(2)}, maxH:${
+                this.vaultMaxHeight
+              }`
+          );
+
+          // More permissive check for vaultable objects
+          // Either the object is tall enough for collision detection OR
+          // the object's top is at a vaultable height relative to player
+          if (
+            ((objectHeight >= 0.6 || // Reduced from 0.7
+              heightFromFeet >= 0.6) && // Consider absolute height from feet
+              heightDifference > this.vaultMinHeight &&
+              heightDifference < this.vaultMaxHeight) ||
+            // Special handling for Half Walls
+            (object.userData.name === "HalfWall" &&
+              hit.distance < this.vaultDistance * 0.7)
+          ) {
+            this.canVault = true;
+
+            // For Half Walls, only make vaultable if directly facing it (within 45 degrees)
+            if (object.userData.name === "HalfWall") {
+              // Calculate angle between player direction and hit normal
+              const playerFacing = direction.clone();
+              const hitNormal = hit.face.normal.clone();
+              // Invert normal because it points outward from the surface
+              hitNormal.negate();
+
+              // Get the angle between the two vectors
+              const angle = playerFacing.angleTo(hitNormal);
+
+              // If not facing the wall within 60 degrees, don't vault
+              if (angle > Math.PI / 3) {
+                this.canVault = false;
+                continue;
+              }
+            }
+
+            // Calculate vault target position (on top of the object)
+            const targetPos = hit.point.clone();
+            targetPos.y = objectTop + 0.1; // Slightly above surface
+
+            // Move slightly forward to get fully on the object
+            targetPos.add(direction.clone().multiplyScalar(1.5));
+
+            this.vaultTarget = targetPos;
+            this.showVaultPrompt();
+            return; // Exit once we find a vaultable object
+          }
+        }
+      }
+    }
+
+    // If we get here, no valid vault target was found
+    this.hideVaultPrompt();
   }
 
   onKeyUp(event) {
@@ -206,6 +483,30 @@ export class PlayerController {
 
   update(deltaTime) {
     if (this.controls.isLocked) {
+      // Handle vaulting if in progress
+      if (this.isVaulting) {
+        this.updateVault(deltaTime);
+        this.updateLean(deltaTime);
+        return; // Skip normal movement processing during vault
+      }
+
+      // Don't check for vaultable objects every frame, only periodically
+      const currentTime = Date.now() / 1000; // Convert to seconds
+      if (currentTime - this.lastVaultCheckTime > this.vaultCheckInterval) {
+        this.checkForVaultableObjects();
+        this.lastVaultCheckTime = currentTime;
+      }
+
+      // Reset canVault flag if speed is too high to prevent auto-vaulting
+      // This prevents accidental vaulting when moving quickly
+      if (
+        this.canVault &&
+        (Math.abs(this.velocity.x) > 15 || Math.abs(this.velocity.z) > 15)
+      ) {
+        this.canVault = false;
+        this.hideVaultPrompt();
+      }
+
       // Apply damping to slow down movement
       this.velocity.x -= this.velocity.x * 10.0 * deltaTime;
       this.velocity.z -= this.velocity.z * 10.0 * deltaTime;
