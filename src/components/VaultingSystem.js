@@ -16,8 +16,8 @@ export class VaultingSystem {
 
     // Configuration
     this.vaultDistance = 1.5; // How far ahead to check for vaultable objects
-    this.vaultMaxHeightDiff = 1.7; // Max height difference player center vs object top
-    this.vaultMinHeightDiff = 0.3; // Min height difference player center vs object top
+    this.vaultMaxHeightDiff = 1.3; // Max height diff: object top vs player feet (was 1.7, adjusted lower)
+    this.vaultMinHeightDiff = 0.2; // Min height diff: object top vs player feet (was 0.3, adjusted lower)
     this.playerHeight = 1.6; // Keep consistent with PlayerController/CollisionDetection
     this.playerRadius = 0.4; // Keep consistent
 
@@ -65,9 +65,10 @@ export class VaultingSystem {
     }
     direction.normalize();
 
-    // Ray origin: Player's center position seems fine for starting the check
-    const origin = playerPos.clone();
-    // Optional: Lower origin slightly if needed: origin.y -= 0.2;
+    // Ray origin: Lowered slightly from player center for better low object detection
+    // Player center is at playerPos.y (e.g., 0.8 when grounded)
+    // Let's try originating from 0.3 units below the center.
+    const origin = playerPos.clone().add(new THREE.Vector3(0, -0.3, 0)); // Origin at Y = 0.5 when grounded
 
     raycaster.set(origin, direction);
     raycaster.far = this.vaultDistance; // Check up to 1.5 units ahead
@@ -82,32 +83,30 @@ export class VaultingSystem {
       // --- Check 1: Is the object explicitly marked as vaultable? ---
       if (object.userData && object.userData.type === "vaultable") {
         // --- Check 2: Calculate object's top Y coordinate ---
-        // Use userData.height if available (set by TableModel/MiniTableModel)
-        // Otherwise, try geometry parameters
         let objectHeight = object.userData.height;
         if (objectHeight === undefined && object.geometry.parameters) {
           objectHeight = object.geometry.parameters.height || 0;
         }
-
-        // Calculate top Y based on object's position and height
-        // Assumes object origin is at its base or center
+        // Calculate top Y based on object's world position and height
+        // Assumes object's pivot/origin is at its base or center.
         // Our Table/MiniTable models have origin at center, position.y = height/2
+        // So, top Y = object.position.y + objectHeight / 2
         const objectTopY = object.position.y + objectHeight / 2;
 
-        // --- Check 3: Is the object height within a reasonable range? ---
-        // Let's check the absolute height of the object top, not relative to player center.
-        // Define min/max world Y coordinates for vaultable surfaces.
-        const minVaultableWorldY = 0.3; // e.g., slightly above ground
-        const maxVaultableWorldY = 1.3; // e.g., slightly below player full height
+        // --- Check 3: Is the object height relative to player feet within range? ---
+        const playerFeetY = playerPos.y - this.playerHeight / 2;
+        const heightDifference = objectTopY - playerFeetY;
 
+        // Use the relative height difference checks
         if (
-          objectTopY >= minVaultableWorldY &&
-          objectTopY <= maxVaultableWorldY
+          heightDifference >= this.vaultMinHeightDiff &&
+          heightDifference <= this.vaultMaxHeightDiff
         ) {
           // --- Vault is possible ---
           // Calculate landing position: on top of the object, slightly forward
-          this.vaultTargetPosition = hit.point.clone(); // Start near the hit point
-          this.vaultTargetPosition.y = objectTopY + this.playerHeight / 2; // Land with player center at correct height above object top
+          this.vaultTargetPosition = hit.point.clone();
+          // Land with player center at correct height above object top
+          this.vaultTargetPosition.y = objectTopY + this.playerHeight / 2;
           // Move slightly past the hit point along the direction vector
           this.vaultTargetPosition.addScaledVector(
             direction,

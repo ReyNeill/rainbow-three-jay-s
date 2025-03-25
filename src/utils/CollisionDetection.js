@@ -76,6 +76,7 @@ export class CollisionDetection {
 
       // Check from player center at different heights
       const checkHeights = [
+        this.collisionMargin, // Check near the feet
         this.stepHeight + this.collisionMargin, // Just above step height
         this.playerHeight / 2, // Middle
         this.playerHeight - this.collisionMargin, // Top
@@ -83,9 +84,12 @@ export class CollisionDetection {
 
       let horizontalCollision = false;
       for (const height of checkHeights) {
+        // Calculate origin Y relative to player center (at truePosition.y)
+        const originOffsetY = height - this.playerHeight / 2;
         const origin = currentPos
           .clone()
-          .add(new THREE.Vector3(0, height - this.playerHeight / 2, 0));
+          .add(new THREE.Vector3(0, originOffsetY, 0));
+
         // Check slightly ahead + radius
         const intersections = this._intersect(
           origin,
@@ -95,11 +99,9 @@ export class CollisionDetection {
 
         if (intersections.length > 0) {
           const hit = intersections[0];
-          // Simple blocking: stop horizontal movement if collision is close
-          if (
-            hit.distance <
-            this.playerRadius + horizontalDist + this.collisionMargin
-          ) {
+          // Check if the hit is close enough to block movement
+          if (hit.distance <= this.playerRadius + this.collisionMargin) {
+            // Check against radius + margin only
             horizontalCollision = true;
             break; // Stop checking heights if collision found
           }
