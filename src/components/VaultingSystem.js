@@ -21,9 +21,8 @@ export class VaultingSystem {
     this.playerHeight = 1.6; // Keep consistent with PlayerController/CollisionDetection
     this.playerRadius = 0.4; // Keep consistent
 
-    // Timing
-    this.lastVaultCheckTime = 0;
-    this.vaultCheckInterval = 0.2; // Check for vaultable objects every 0.2 seconds
+    // Internal state for UI updates
+    this._isPromptVisible = false;
   }
 
   setCollidableObjects(objects) {
@@ -31,95 +30,104 @@ export class VaultingSystem {
   }
 
   showVaultPrompt() {
-    if (this.uiManager) {
+    if (this.uiManager && !this._isPromptVisible) {
       this.uiManager.setVaultPromptVisible(true);
+      this._isPromptVisible = true;
     }
   }
 
   hideVaultPrompt() {
-    if (this.uiManager) {
+    if (this.uiManager && this._isPromptVisible) {
       this.uiManager.setVaultPromptVisible(false);
+      this._isPromptVisible = false;
     }
   }
 
   // Checks if a vault is possible from the current state
   checkForVaultableObjects(playerPos, cameraQuaternion, isOnGround) {
+    // Store previous state to check if UI needs update
+    const previouslyCouldVault = this.canVault;
     this.canVault = false; // Reset before check
 
+    // Don't check if already vaulting or not on the ground
     if (this.isVaulting || !isOnGround) {
-      this.hideVaultPrompt();
+      if (previouslyCouldVault) this.hideVaultPrompt(); // Hide if state changed
       return;
     }
-
-    // Throttle checks
-    const currentTime = Date.now() / 1000;
-    if (currentTime - this.lastVaultCheckTime < this.vaultCheckInterval) {
-      // Keep showing prompt if canVault was true from last check
-      if (this.canVault) this.showVaultPrompt();
-      return;
-    }
-    this.lastVaultCheckTime = currentTime;
 
     const raycaster = new THREE.Raycaster();
     const direction = new THREE.Vector3(0, 0, -1);
     direction.applyQuaternion(cameraQuaternion);
-    direction.y = 0; // Horizontal direction
-    if (direction.lengthSq() === 0) return; // Avoid issues if looking straight up/down
+    direction.y = 0; // Horizontal direction only
+    if (direction.lengthSq() === 0) {
+      if (previouslyCouldVault) this.hideVaultPrompt();
+      return;
+    }
     direction.normalize();
 
-    // Ray origin slightly below player center (waist height)
+    // Ray origin: Player's center position seems fine for starting the check
     const origin = playerPos.clone();
-    origin.y -= 0.4; // Adjust origin height for better detection
+    // Optional: Lower origin slightly if needed: origin.y -= 0.2;
 
     raycaster.set(origin, direction);
-    raycaster.far = this.vaultDistance;
+    raycaster.far = this.vaultDistance; // Check up to 1.5 units ahead
 
-    const intersects = raycaster.intersectObjects(this.collidableObjects, true); // Recursive check
+    const intersects = raycaster.intersectObjects(this.collidableObjects, true);
 
-    let foundVaultable = false;
+    let foundVaultableThisFrame = false;
     if (intersects.length > 0) {
       const hit = intersects[0];
       const object = hit.object;
 
-      // Determine object's top Y coordinate
-      let objectTopY = 0;
-      if (object.geometry.boundingBox) {
-        objectTopY = object.position.y + object.geometry.boundingBox.max.y;
-      } else if (object.geometry.parameters) {
-        // Approx for BoxGeometry, PlaneGeometry etc.
-        objectTopY =
-          object.position.y + (object.geometry.parameters.height || 0) / 2;
-      } else {
-        // Fallback: use hit point y (less reliable)
-        objectTopY = hit.point.y;
-      }
+      // --- Check 1: Is the object explicitly marked as vaultable? ---
+      if (object.userData && object.userData.type === "vaultable") {
+        // --- Check 2: Calculate object's top Y coordinate ---
+        // Use userData.height if available (set by TableModel/MiniTableModel)
+        // Otherwise, try geometry parameters
+        let objectHeight = object.userData.height;
+        if (objectHeight === undefined && object.geometry.parameters) {
+          objectHeight = object.geometry.parameters.height || 0;
+        }
 
-      const heightDifference = objectTopY - playerPos.y;
+        // Calculate top Y based on object's position and height
+        // Assumes object origin is at its base or center
+        // Our Table/MiniTable models have origin at center, position.y = height/2
+        const objectTopY = object.position.y + objectHeight / 2;
 
-      // Check height criteria
-      if (
-        heightDifference > this.vaultMinHeightDiff &&
-        heightDifference < this.vaultMaxHeightDiff
-      ) {
-        // Calculate landing position: on top of the object, slightly forward
-        this.vaultTargetPosition = hit.point.clone();
-        this.vaultTargetPosition.y = objectTopY + this.playerHeight / 2; // Land with feet on top
-        // Move slightly past the hit point along the direction vector
-        this.vaultTargetPosition.addScaledVector(
-          direction,
-          this.playerRadius * 1.5
-        );
+        // --- Check 3: Is the object height within a reasonable range? ---
+        // Let's check the absolute height of the object top, not relative to player center.
+        // Define min/max world Y coordinates for vaultable surfaces.
+        const minVaultableWorldY = 0.3; // e.g., slightly above ground
+        const maxVaultableWorldY = 1.3; // e.g., slightly below player full height
 
-        this.vaultObjectTopY = objectTopY; // Store the peak height for the curve
-        this.canVault = true;
-        foundVaultable = true;
-        this.showVaultPrompt();
+        if (
+          objectTopY >= minVaultableWorldY &&
+          objectTopY <= maxVaultableWorldY
+        ) {
+          // --- Vault is possible ---
+          // Calculate landing position: on top of the object, slightly forward
+          this.vaultTargetPosition = hit.point.clone(); // Start near the hit point
+          this.vaultTargetPosition.y = objectTopY + this.playerHeight / 2; // Land with player center at correct height above object top
+          // Move slightly past the hit point along the direction vector
+          this.vaultTargetPosition.addScaledVector(
+            direction,
+            this.playerRadius * 1.5 // Adjust multiplier as needed
+          );
+
+          this.vaultObjectTopY = objectTopY; // Store the peak height for the curve
+          this.canVault = true; // Set canVault for this frame
+          foundVaultableThisFrame = true;
+        }
       }
     }
 
-    if (!foundVaultable) {
+    // Update UI only if the vaultable state changed
+    if (foundVaultableThisFrame && !previouslyCouldVault) {
+      this.showVaultPrompt();
+    } else if (!foundVaultableThisFrame && previouslyCouldVault) {
       this.hideVaultPrompt();
     }
+    // If state didn't change, do nothing to the UI
   }
 
   // Attempts to start a vault if possible
@@ -179,6 +187,6 @@ export class VaultingSystem {
 
   // Call this when pointer lock is lost to clean up UI
   onPointerUnlock() {
-    this.hideVaultPrompt();
+    this.hideVaultPrompt(); // This will set _isPromptVisible to false
   }
 }
