@@ -1,9 +1,11 @@
 import * as THREE from "three";
+import { TargetModel } from "../models/TargetModel";
 
 export class GameMap {
   constructor(scene) {
     this.scene = scene;
     this.objects = []; // Collidable objects
+    this.targets = []; // Target instances
 
     this.createMap();
   }
@@ -51,18 +53,6 @@ export class GameMap {
   }
 
   createTargets() {
-    // Create some small objects that can be shot at
-    const targetGeometry = new THREE.SphereGeometry(0.7, 16, 16);
-    const targetMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-
-    // Create a ring geometry for target outline
-    const ringGeometry = new THREE.TorusGeometry(0.8, 0.1, 8, 16);
-    const ringMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.7,
-    });
-
     // Create targets in different positions
     const targetPositions = [
       { x: -30, y: 2.0, z: -25 },
@@ -81,19 +71,14 @@ export class GameMap {
     ];
 
     targetPositions.forEach((pos) => {
-      const target = new THREE.Mesh(targetGeometry, targetMaterial.clone());
-      target.position.set(pos.x, pos.y, pos.z);
-      this.scene.add(target);
-      this.objects.push(target);
+      const position = new THREE.Vector3(pos.x, pos.y, pos.z);
+      const target = new TargetModel(this.scene, position);
 
-      // Add a ring around the target for better visibility
-      const ring = new THREE.Mesh(ringGeometry, ringMaterial.clone());
-      ring.rotation.x = Math.PI / 2; // Make it face the player
-      ring.position.copy(target.position);
-      this.scene.add(ring);
+      // Store target instance
+      this.targets.push(target);
 
-      // Add userData for hit detection
-      target.userData.isTarget = true;
+      // Add mesh to collidable objects
+      this.objects.push(target.getMesh());
     });
   }
 
@@ -121,5 +106,9 @@ export class GameMap {
 
   getCollidableObjects() {
     return this.objects;
+  }
+
+  getTargets() {
+    return this.targets;
   }
 }

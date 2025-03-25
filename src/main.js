@@ -63,10 +63,10 @@ crosshair.hide(); // Hidden until pointer is locked
 
 // Create dummy player for target practice
 // Position the dummy player directly in front of starting position
-const dummyPlayer = new DummyPlayer(scene, { x: 0, y: 2, z: -15 }, "red");
+const dummyPlayer = new DummyPlayer(scene, { x: 0, y: 2, z: -15 });
 
 // Add another dummy to the side for easier testing
-const dummyPlayer2 = new DummyPlayer(scene, { x: 5, y: 2, z: -15 }, "blue");
+const dummyPlayer2 = new DummyPlayer(scene, { x: 5, y: 2, z: -15 });
 
 // Socket.io connection
 const socket = io();
@@ -78,6 +78,9 @@ const weaponSystem = new WeaponSystem(
   [...gameMap.getCollidableObjects(), ...otherPlayers.getPlayerObjects()],
   socket
 );
+
+// Pass the target instances to weapon system
+weaponSystem.targets = gameMap.getTargets();
 
 // Set the dummy players for the weapon system
 weaponSystem.setDummyPlayer(dummyPlayer);
