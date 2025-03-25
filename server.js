@@ -25,7 +25,7 @@ io.on("connection", (socket) => {
   // Add new player to players object
   players[socket.id] = {
     id: socket.id,
-    position: { x: 0, y: 2, z: 15 },
+    position: { x: 0, y: 0.8, z: 15 },
     rotation: { x: 0, y: 0, z: 0 },
     leanAmount: 0,
     team: Object.keys(players).length % 2 === 0 ? "blue" : "red", // Assign to alternating teams

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { PlayerModel } from "./PlayerModel.js";
 
 export class DummyModel extends PlayerModel {
-  constructor(scene, position = { x: 0, y: 2, z: 0 }, options = {}) {
+  constructor(scene, position = { x: 0, y: 0.8, z: 0 }, options = {}) {
     // Process options - override team color to be yellow
     const combinedOptions = {
       team: "yellow", // Special team for dummies
@@ -16,8 +16,9 @@ export class DummyModel extends PlayerModel {
 
     // Setup gravity
     this.velocity = new THREE.Vector3();
-    this.gravity = 9.8 * 10; // Match PlayerController gravity
-    this.floorHeight = 0; // Distance from ground to model base
+    this.gravity = 30.0; // Match PlayerController gravity
+    this.playerHeight = 1.6; // Changed from 1.8 to 1.6
+    this.floorLevelY = position.y - this.playerHeight / 2; // Calculate initial floor level based on spawn
     this.isOnGround = false;
 
     // Add small text indicator above the health bar
@@ -65,7 +66,7 @@ export class DummyModel extends PlayerModel {
       side: THREE.DoubleSide,
     });
     this.textMesh = new THREE.Mesh(textGeometry, textMaterial);
-    this.textMesh.position.set(0, 3.3, 0); // Just above health bar
+    this.textMesh.position.set(0, 1.6, 0); // Adjusted y position
     this.modelGroup.add(this.textMesh);
   }
 
@@ -104,6 +105,9 @@ export class DummyModel extends PlayerModel {
       const deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
       lastTime = currentTime;
 
+      // Determine the target ground level (center of the model)
+      const groundTargetY = this.floorLevelY + this.playerHeight / 2; // Center Y when on ground
+
       // Skip if already on ground
       if (this.isOnGround) return;
 
@@ -113,9 +117,9 @@ export class DummyModel extends PlayerModel {
       // Update position
       this.modelGroup.position.y += this.velocity.y * deltaTime;
 
-      // Check for ground collision
-      if (this.modelGroup.position.y <= this.floorHeight) {
-        this.modelGroup.position.y = this.floorHeight;
+      // Check for ground collision (compare model center Y with target ground center Y)
+      if (this.modelGroup.position.y <= groundTargetY) {
+        this.modelGroup.position.y = groundTargetY; // Snap to ground center Y
         this.velocity.y = 0;
         this.isOnGround = true;
       }

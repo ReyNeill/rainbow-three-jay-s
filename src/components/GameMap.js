@@ -25,6 +25,7 @@ export class GameMap {
     floor.rotation.x = Math.PI / 2;
     floor.position.y = -0.5;
     this.scene.add(floor);
+    this.objects.push(floor);
 
     // Create main boundary walls
     this.createWall(-40, -10, 2, 60, 0x88ff88, 5); // Left wall

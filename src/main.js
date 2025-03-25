@@ -13,12 +13,12 @@ scene.background = new THREE.Color(0x87ceeb); // Sky blue background
 
 // Initialize the camera
 const camera = new THREE.PerspectiveCamera(
-  75,
+  60,
   window.innerWidth / window.innerHeight,
   0.1,
   1000
 );
-camera.position.set(0, 2, -10); // Position player further forward and lower
+// camera.position.set(0, 2, -10); // This initial position is overridden by PlayerController anyway
 
 // Initialize the renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -63,10 +63,10 @@ crosshair.hide(); // Hidden until pointer is locked
 
 // Create dummy player for target practice
 // Position the dummy player directly in front of starting position
-const dummyPlayer = new DummyPlayer(scene, { x: 0, y: 2, z: -15 });
+const dummyPlayer = new DummyPlayer(scene, { x: 0, y: 0.8, z: -15 });
 
 // Add another dummy to the side for easier testing
-const dummyPlayer2 = new DummyPlayer(scene, { x: 5, y: 2, z: -15 });
+const dummyPlayer2 = new DummyPlayer(scene, { x: 5, y: 0.8, z: -15 });
 
 // Add dummy players to player controller's collidable objects
 const dummyMeshes1 = dummyPlayer.getMeshes();

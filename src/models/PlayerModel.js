@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 export class PlayerModel {
-  constructor(scene, position = { x: 0, y: 2, z: 0 }, options = {}) {
+  constructor(scene, position = { x: 0, y: 0.8, z: 0 }, options = {}) {
     this.scene = scene;
     this.position = position;
 
@@ -43,20 +43,26 @@ export class PlayerModel {
   }
 
   createModel() {
-    // Create body
-    const bodyGeometry = new THREE.CapsuleGeometry(0.4, 1.2, 4, 8);
+    // Create body - Adjust size to match collision height 1.6
+    // Total capsule height = length + 2 * radius
+    // 1.6 = length + 2 * 0.4 => length = 0.8
+    const bodyGeometry = new THREE.CapsuleGeometry(0.4, 0.8, 4, 8); // Adjusted length
     const bodyMaterial = this.getTeamMaterial();
     this.bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    // Capsule is centered vertically by default
 
     // Add player ID to userData for hit detection
     this.bodyMesh.userData.playerId = this.options.playerId;
     this.bodyMesh.userData.isFullyCollidable = true; // Mark as fully collidable
 
-    // Create head
-    const headGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+    // Create head - Adjust size and position
+    const headRadius = 0.25; // Keep head size
+    const headGeometry = new THREE.SphereGeometry(headRadius, 16, 16);
     const headMaterial = this.getTeamMaterial(true); // Slightly darker
     this.headMesh = new THREE.Mesh(headGeometry, headMaterial);
-    this.headMesh.position.y = 0.9; // Place on top of body
+    // Position head on top of capsule body
+    // Capsule top is at y = (length / 2) + radius = (0.8 / 2) + 0.4 = 0.4 + 0.4 = 0.8
+    this.headMesh.position.y = 0.8; // Place head center on top of capsule (Adjusted y)
 
     // Add player ID to userData for hit detection
     this.headMesh.userData.playerId = this.options.playerId;
@@ -67,14 +73,16 @@ export class PlayerModel {
     this.modelGroup.add(this.bodyMesh);
     this.modelGroup.add(this.headMesh);
 
-    // Add health bar
+    // Add health bar - Adjust position relative to new head height
     this.healthBarGroup = this.createHealthBar();
-    this.healthBarGroup.position.y = 3; // Place above head
+    // Head top is at headMesh.position.y + headRadius = 0.8 + 0.25 = 1.05
+    // Place health bar slightly above the head
+    this.healthBarGroup.position.y = 1.2; // Adjusted position (was 1.3)
 
     // Add meshes to group
     this.modelGroup.add(this.healthBarGroup);
 
-    // Set position
+    // Set position (group origin corresponds to player center at y=0.8)
     this.modelGroup.position.copy(this.position);
 
     // Add to scene
@@ -119,15 +127,19 @@ export class PlayerModel {
 
     // Update health bar scale based on health percentage
     const healthPercent = Math.max(0, Math.min(100, health)) / 100;
-    this.healthBar.scale.x = healthPercent;
 
-    // Change color based on health
-    if (healthPercent > 0.6) {
-      this.healthBar.material.color.setHex(0x00ff00); // Green
-    } else if (healthPercent > 0.3) {
-      this.healthBar.material.color.setHex(0xffff00); // Yellow
-    } else {
-      this.healthBar.material.color.setHex(0xff0000); // Red
+    // Ensure healthBar exists before accessing properties
+    if (this.healthBar) {
+      this.healthBar.scale.x = healthPercent;
+
+      // Change color based on health
+      if (healthPercent > 0.6) {
+        this.healthBar.material.color.setHex(0x00ff00); // Green
+      } else if (healthPercent > 0.3) {
+        this.healthBar.material.color.setHex(0xffff00); // Yellow
+      } else {
+        this.healthBar.material.color.setHex(0xff0000); // Red
+      }
     }
   }
 

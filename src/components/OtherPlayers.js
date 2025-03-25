@@ -1,215 +1,96 @@
 import * as THREE from "three";
+import { PlayerModel } from "../models/PlayerModel.js"; // Import PlayerModel
 
 export class OtherPlayers {
   constructor(scene) {
     this.scene = scene;
-    this.players = {};
-    this.playerMeshes = {};
+    this.players = {}; // Stores player data from server { id: { position, rotation, leanAmount, team, health } }
+    this.playerModels = {}; // Stores PlayerModel instances { id: PlayerModel }
 
-    // Material for each team
-    this.teamMaterials = {
-      red: new THREE.MeshBasicMaterial({ color: 0xff0000 }),
-      blue: new THREE.MeshBasicMaterial({ color: 0x0000ff }),
-    };
-
-    // Lean parameters
-    this.maxLeanAngle = Math.PI / 12; // ~15 degrees
-    this.maxLeanOffset = 0.75; // How far to move the mesh sideways when leaning
+    // Materials are now handled by PlayerModel based on team option
+    // Lean parameters are now handled by PlayerModel
   }
 
   addPlayer(playerData) {
     // Store player data
     this.players[playerData.id] = playerData;
 
-    // Create player mesh (the actual visible character)
-    const geometry = new THREE.BoxGeometry(1, 2, 1);
-    const material =
-      this.teamMaterials[playerData.team] || this.teamMaterials.red;
-    const playerMesh = new THREE.Mesh(geometry, material);
+    // Create player model using PlayerModel
+    const model = new PlayerModel(this.scene, playerData.position, {
+      team: playerData.team,
+      playerId: playerData.id,
+      health: playerData.health !== undefined ? playerData.health : 100,
+    });
 
-    // Add player ID to userData for hit detection
-    playerMesh.userData.playerId = playerData.id;
-    playerMesh.userData.isPlayer = true;
+    // Store the model instance
+    this.playerModels[playerData.id] = model;
 
-    // Head mesh (to make it clearer which way the player is facing)
-    const headGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-    const headMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-    const headMesh = new THREE.Mesh(headGeometry, headMaterial);
-    headMesh.position.set(0, 1.3, 0.3); // Position at the top front of the body
-    headMesh.userData.playerId = playerData.id; // Also add player ID to head for hit detection
-    headMesh.userData.isPlayer = true;
-    playerMesh.add(headMesh);
-
-    // Create a group to hold the player mesh (allows for applying lean without moving position)
-    const playerGroup = new THREE.Group();
-    playerGroup.add(playerMesh);
-    playerGroup.userData.playerId = playerData.id;
-    playerGroup.userData.isPlayer = true;
-
-    // Add health bar above player
-    const healthBarGroup = this.createHealthBar();
-    playerGroup.add(healthBarGroup);
-    healthBarGroup.position.y = 2.5; // Position above player's head
-
-    // Set initial position from player data
-    playerGroup.position.set(
-      playerData.position.x,
-      playerData.position.y,
-      playerData.position.z
+    // Apply initial rotation and lean if provided
+    model.updatePosition(
+      playerData.position,
+      playerData.rotation,
+      playerData.leanAmount
     );
 
-    // Set initial rotation
-    if (playerData.rotation) {
-      playerGroup.rotation.set(
-        playerData.rotation.x,
-        playerData.rotation.y,
-        playerData.rotation.z
-      );
+    // Initial health update (already handled by constructor, but good practice)
+    if (playerData.health !== undefined) {
+      model.updateHealth(playerData.health);
     }
-
-    // Apply lean if present (visual effect only)
-    if (playerData.leanAmount !== undefined) {
-      this.applyLean(playerMesh, playerData.leanAmount);
-    }
-
-    this.scene.add(playerGroup);
-    this.playerMeshes[playerData.id] = {
-      group: playerGroup,
-      mesh: playerMesh,
-      healthBar: healthBarGroup.children[0],
-    };
   }
 
-  createHealthBar() {
-    const group = new THREE.Group();
-
-    // Create health bar background
-    const bgGeometry = new THREE.PlaneGeometry(1.2, 0.2);
-    const bgMaterial = new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      side: THREE.DoubleSide,
-    });
-    const background = new THREE.Mesh(bgGeometry, bgMaterial);
-    group.add(background);
-
-    // Create health bar foreground (green part)
-    const fgGeometry = new THREE.PlaneGeometry(1, 0.15);
-    const fgMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ff00,
-      side: THREE.DoubleSide,
-    });
-    const foreground = new THREE.Mesh(fgGeometry, fgMaterial);
-    foreground.position.z = 0.01; // Slightly in front of background
-
-    // Set origin to left side for easy scaling
-    fgGeometry.translate(0.5, 0, 0);
-    foreground.position.x = -0.6; // Position at left of background
-
-    group.add(foreground);
-
-    // Make health bar always face the camera
-    group.rotation.x = Math.PI / 2;
-
-    return group;
-  }
+  // Remove old createHealthBar method - PlayerModel handles this
 
   updateHealth(playerId, health) {
-    if (this.playerMeshes[playerId] && this.playerMeshes[playerId].healthBar) {
-      // Update health bar scale based on health percentage (0-100)
-      const healthPercent = Math.max(0, Math.min(100, health)) / 100;
-      this.playerMeshes[playerId].healthBar.scale.x = healthPercent;
-
-      // Change color based on health
-      if (healthPercent > 0.6) {
-        this.playerMeshes[playerId].healthBar.material.color.setHex(0x00ff00); // Green
-      } else if (healthPercent > 0.3) {
-        this.playerMeshes[playerId].healthBar.material.color.setHex(0xffff00); // Yellow
-      } else {
-        this.playerMeshes[playerId].healthBar.material.color.setHex(0xff0000); // Red
-      }
+    if (this.playerModels[playerId]) {
+      this.playerModels[playerId].updateHealth(health);
+    }
+    // Update stored data as well
+    if (this.players[playerId]) {
+      this.players[playerId].health = health;
     }
   }
 
   showHitEffect(playerId) {
-    if (this.playerMeshes[playerId] && this.playerMeshes[playerId].mesh) {
-      const playerMesh = this.playerMeshes[playerId].mesh;
-
-      // Store original material
-      const originalMaterial = playerMesh.material;
-
-      // Set to hit material (white flash)
-      playerMesh.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-
-      // Reset after short delay
-      setTimeout(() => {
-        if (playerMesh) {
-          playerMesh.material = originalMaterial;
-        }
-      }, 100);
+    if (this.playerModels[playerId]) {
+      this.playerModels[playerId].showHitEffect();
     }
   }
 
   updatePlayer(playerData) {
     // Update stored player data
     if (this.players[playerData.id]) {
-      this.players[playerData.id].position = playerData.position;
-      this.players[playerData.id].rotation = playerData.rotation;
+      this.players[playerData.id] = {
+        ...this.players[playerData.id], // Keep existing data like team
+        ...playerData, // Overwrite with new data (position, rotation, lean, health)
+      };
 
-      if (playerData.leanAmount !== undefined) {
-        this.players[playerData.id].leanAmount = playerData.leanAmount;
-      }
-
-      // Update health if provided
-      if (playerData.health !== undefined) {
-        this.players[playerData.id].health = playerData.health;
-        this.updateHealth(playerData.id, playerData.health);
-      }
-
-      // Update player mesh position and rotation
-      if (this.playerMeshes[playerData.id]) {
-        const { group, mesh } = this.playerMeshes[playerData.id];
-
-        // Update position - set directly to what server sent
-        group.position.set(
-          playerData.position.x,
-          playerData.position.y,
-          playerData.position.z
+      // Update the corresponding PlayerModel instance
+      if (this.playerModels[playerData.id]) {
+        const model = this.playerModels[playerData.id];
+        model.updatePosition(
+          playerData.position,
+          playerData.rotation,
+          playerData.leanAmount
         );
 
-        // Apply rotation
-        if (playerData.rotation) {
-          group.rotation.set(
-            playerData.rotation.x,
-            playerData.rotation.y,
-            playerData.rotation.z
-          );
-        }
-
-        // Apply lean as a visual effect only
-        if (playerData.leanAmount !== undefined) {
-          this.applyLean(mesh, playerData.leanAmount);
+        // Update health if provided
+        if (playerData.health !== undefined) {
+          model.updateHealth(playerData.health);
         }
       }
+    } else {
+      // If player doesn't exist locally yet, add them
+      this.addPlayer(playerData);
     }
   }
 
-  applyLean(mesh, leanAmount) {
-    // Reset mesh position and rotation relative to its parent group
-    mesh.position.set(0, 0, 0);
-    mesh.rotation.z = 0;
-
-    // Apply rotation for leaning
-    mesh.rotation.z = -leanAmount * this.maxLeanAngle;
-
-    // Apply horizontal offset for leaning (visual effect only)
-    mesh.position.x = leanAmount * this.maxLeanOffset;
-  }
+  // Remove old applyLean method - PlayerModel handles this
 
   removePlayer(playerId) {
-    // Remove player mesh from scene
-    if (this.playerMeshes[playerId]) {
-      this.scene.remove(this.playerMeshes[playerId].group);
-      delete this.playerMeshes[playerId];
+    // Remove player model from scene and dispose
+    if (this.playerModels[playerId]) {
+      this.playerModels[playerId].dispose(); // Use the model's dispose method
+      delete this.playerModels[playerId];
     }
 
     // Remove player data
@@ -225,35 +106,27 @@ export class OtherPlayers {
     // Add all players
     Object.values(players).forEach((playerData) => {
       this.addPlayer(playerData);
-
-      // Set initial health if provided
-      if (playerData.health !== undefined) {
-        this.updateHealth(playerData.id, playerData.health);
-      }
     });
   }
 
   clear() {
-    // Remove all player meshes from scene
-    Object.keys(this.playerMeshes).forEach((playerId) => {
-      this.scene.remove(this.playerMeshes[playerId].group);
+    // Remove all player models from scene and dispose
+    Object.values(this.playerModels).forEach((model) => {
+      model.dispose();
     });
 
-    // Reset players and meshes
+    // Reset players and models
     this.players = {};
-    this.playerMeshes = {};
+    this.playerModels = {};
   }
 
-  // Return all player objects for hit detection
+  // Return all player meshes for hit detection
   getPlayerObjects() {
     const playerObjects = [];
 
-    Object.values(this.playerMeshes).forEach(({ group, mesh }) => {
-      // Add the main mesh and all its children (body and head)
-      playerObjects.push(mesh);
-      mesh.children.forEach((child) => {
-        playerObjects.push(child);
-      });
+    Object.values(this.playerModels).forEach((model) => {
+      // Get meshes from the PlayerModel instance
+      playerObjects.push(...model.getMeshes());
     });
 
     return playerObjects;

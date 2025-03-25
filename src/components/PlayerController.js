@@ -23,12 +23,12 @@ export class PlayerController {
     // Movement speed and physics
     this.velocity = new THREE.Vector3();
     this.direction = new THREE.Vector3();
-    this.moveSpeed = 100.0; // Units per second
+    this.moveSpeed = 10.0; // Adjusted move speed (units per second) - 100 was very high
 
     // Gravity and ground state
-    this.gravity = 9.8 * 10; // Gravity constant (multiplied for better effect)
+    this.gravity = 30.0; // Adjusted gravity (units per second squared)
     this.isOnGround = true;
-    this.floorHeight = 2; // Player eye height (camera is at y=2)
+    // this.floorHeight = 2; // Removed, ground check is now dynamic
 
     // Vaulting properties
     this.canVault = false;
@@ -38,7 +38,8 @@ export class PlayerController {
     this.vaultDuration = 0.4; // seconds
     this.vaultTimer = 0;
     this.vaultPromptElement = null;
-    this.playerHeight = 2.0; // Player height (same as floorHeight)
+    this.playerHeight = 1.6; // Current height
+    this.headHeightOffset = 0.8; // Vertical offset from center to head center (from PlayerModel)
     this.vaultDistance = 1.5; // Increased from 1.2 to better detect objects
     this.vaultMaxHeight = 1.7; // Increased from 1.5 to better accommodate Half Walls (1.2 height)
     this.vaultMinHeight = 0.3; // Reduced to allow vaulting shorter objects
@@ -48,14 +49,14 @@ export class PlayerController {
     // Camera position tracking
     this.cameraOffset = new THREE.Vector3();
 
-    // Track the true player position (unaffected by lean)
-    this.truePosition = new THREE.Vector3(0, 2, 15);
+    // Track the true player position (unaffected by lean) - Center of collision volume
+    this.truePosition = new THREE.Vector3(0, 0.8, 15);
 
     // Initialize pointer lock controls
     this.controls = new PointerLockControls(this.camera, this.domElement);
 
-    // Set initial camera position
-    this.camera.position.copy(this.truePosition);
+    // Set initial camera position (will be updated in updateLean)
+    // this.camera.position.copy(this.truePosition); // Removed, set dynamically
 
     // Collision detection
     this.collisionDetection = new CollisionDetection(collidableObjects);
@@ -290,6 +291,7 @@ export class PlayerController {
     if (this.isVaulting) return;
 
     // Only check if we're on the ground
+    // Use the isOnGround flag updated by collision detection
     if (!this.isOnGround) {
       this.canVault = false;
       this.hideVaultPrompt();
@@ -476,8 +478,10 @@ export class PlayerController {
         .copy(right)
         .multiplyScalar(this.leanAmount * this.maxLeanOffset);
 
-      // Update camera position (adding lean offset to the true position)
-      this.camera.position.copy(this.truePosition).add(this.cameraOffset);
+      // Update camera position (adding lean offset AND head height offset to the true position)
+      const cameraBasePosition = this.truePosition.clone();
+      cameraBasePosition.y += this.headHeightOffset; // Add head height offset
+      this.camera.position.copy(cameraBasePosition).add(this.cameraOffset);
     }
   }
 
@@ -486,10 +490,14 @@ export class PlayerController {
       // Handle vaulting if in progress
       if (this.isVaulting) {
         this.updateVault(deltaTime);
-        this.updateLean(deltaTime);
+        // Still update lean visually during vault
+        this.updateLean(deltaTime); // This now includes head offset
+        // Ensure camera follows the vaulting position + head offset + lean offset
+        // updateLean already sets the final camera position correctly
         return; // Skip normal movement processing during vault
       }
 
+      // --- Vault Check ---
       // Don't check for vaultable objects every frame, only periodically
       const currentTime = Date.now() / 1000; // Convert to seconds
       if (currentTime - this.lastVaultCheckTime > this.vaultCheckInterval) {
@@ -497,85 +505,91 @@ export class PlayerController {
         this.lastVaultCheckTime = currentTime;
       }
 
-      // Reset canVault flag if speed is too high to prevent auto-vaulting
-      // This prevents accidental vaulting when moving quickly
-      if (
-        this.canVault &&
-        (Math.abs(this.velocity.x) > 15 || Math.abs(this.velocity.z) > 15)
-      ) {
-        this.canVault = false;
-        this.hideVaultPrompt();
-      }
-
-      // Apply damping to slow down movement
+      // --- Calculate Movement Intent ---
+      // Apply damping to slow down horizontal movement when keys are released
       this.velocity.x -= this.velocity.x * 10.0 * deltaTime;
       this.velocity.z -= this.velocity.z * 10.0 * deltaTime;
 
-      // Apply gravity to y velocity
-      this.velocity.y -= this.gravity * deltaTime;
-
-      // Check for ground collision
-      if (this.truePosition.y <= this.floorHeight && this.velocity.y < 0) {
-        this.velocity.y = 0;
-        this.truePosition.y = this.floorHeight;
-        this.isOnGround = true;
-      } else {
-        this.isOnGround = false;
-      }
-
-      // Calculate movement direction
+      // Calculate movement direction based on input
       this.direction.z = Number(this.moveForward) - Number(this.moveBackward);
       this.direction.x = Number(this.moveRight) - Number(this.moveLeft);
-      this.direction.normalize();
+      this.direction.normalize(); // Ensure consistent speed diagonally
 
-      // Apply movement in the direction the camera is facing
-      if (this.moveForward || this.moveBackward) {
-        this.velocity.z -= this.direction.z * this.moveSpeed * deltaTime;
-      }
-      if (this.moveLeft || this.moveRight) {
-        this.velocity.x -= this.direction.x * this.moveSpeed * deltaTime;
-      }
-
-      // Check for collisions using true position
-      this.velocity = this.collisionDetection.checkCollision(
-        this.truePosition,
-        this.velocity
-      );
-
-      // Get direction vectors based on camera orientation
+      // Get camera orientation vectors for movement calculation
       const forward = new THREE.Vector3(0, 0, -1);
       const right = new THREE.Vector3(1, 0, 0);
       forward.applyQuaternion(this.camera.quaternion);
       right.applyQuaternion(this.camera.quaternion);
 
-      // Zero out the Y component to keep movement horizontal
+      // Zero out the Y component to keep movement horizontal relative to camera
       forward.y = 0;
       right.y = 0;
+      if (forward.lengthSq() > 0) forward.normalize(); // Normalize only if not zero vector
+      if (right.lengthSq() > 0) right.normalize();
 
-      // Only normalize if vectors are not zero length
-      if (forward.length() > 0) forward.normalize();
-      if (right.length() > 0) right.normalize();
+      // Calculate target velocity based on input and camera direction
+      const targetVelocityX =
+        (right.x * this.direction.x + forward.x * this.direction.z) *
+        this.moveSpeed;
+      const targetVelocityZ =
+        (right.z * this.direction.x + forward.z * this.direction.z) *
+        this.moveSpeed;
 
-      // Move the true position directly
-      if (this.velocity.z !== 0 && forward.length() > 0) {
-        const moveVec = forward
-          .clone()
-          .multiplyScalar(-this.velocity.z * deltaTime);
-        this.truePosition.add(moveVec);
+      // Apply movement intent smoothly (or directly, depending on desired feel)
+      // Using direct application for now:
+      this.velocity.x = targetVelocityX;
+      this.velocity.z = targetVelocityZ;
+
+      // --- Apply Gravity (before collision check) ---
+      // Gravity is always applied unless collision detection finds ground
+      // The collision check will zero out downward velocity if grounded
+      this.velocity.y -= this.gravity * deltaTime;
+
+      // --- Collision Detection and Response ---
+      // Call the updated collision check
+      const collisionResult = this.collisionDetection.checkCollision(
+        this.truePosition, // Use the actual player position
+        this.velocity, // Pass the current velocity (including gravity)
+        deltaTime // Pass delta time
+      );
+
+      // Update velocity based on collision results
+      this.velocity.copy(collisionResult.velocity);
+      this.isOnGround = collisionResult.onGround; // Update ground status
+
+      // --- Update Position ---
+      // Update the true player position using the (potentially modified) velocity
+      this.truePosition.add(this.velocity.clone().multiplyScalar(deltaTime));
+
+      // --- Update Camera ---
+      // Make the camera follow the player's true position + head offset + lean offset
+      this.updateLean(deltaTime); // Calculates cameraOffset and sets final camera position
+
+      // --- Post-Update Vault Check ---
+      // Reset canVault flag if speed is too high to prevent auto-vaulting
+      // This prevents accidental vaulting when moving quickly towards an object
+      const horizontalSpeedSq =
+        this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z;
+      if (
+        this.canVault &&
+        horizontalSpeedSq > this.moveSpeed * 0.5 * (this.moveSpeed * 0.5)
+      ) {
+        // Check if moving faster than half speed
+        this.canVault = false;
+        this.hideVaultPrompt();
       }
 
-      if (this.velocity.x !== 0 && right.length() > 0) {
-        const moveVec = right
-          .clone()
-          .multiplyScalar(-this.velocity.x * deltaTime);
-        this.truePosition.add(moveVec);
-      }
+      // --- Deprecated Code Removed ---
+      // Removed old manual ground check:
+      // if (this.truePosition.y <= this.floorHeight && this.velocity.y < 0) { ... }
 
-      // Apply vertical movement to true position
-      this.truePosition.y += this.velocity.y * deltaTime;
-
-      // Make the camera follow the player (base position)
-      this.updateLean(deltaTime);
+      // Removed old direct position update based on input:
+      // if (this.moveForward || this.moveBackward) { ... }
+      // if (this.moveLeft || this.moveRight) { ... }
+      // this.truePosition.y += this.velocity.y * deltaTime; // Now handled by the main position update
+    } else {
+      // If controls are locked, reset velocity
+      this.velocity.set(0, 0, 0);
     }
   }
 

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { DummyModel } from "../models/DummyModel";
 
 export class DummyPlayer {
-  constructor(scene, position = { x: 0, y: 2, z: -25 }) {
+  constructor(scene, position = { x: 0, y: 0.8, z: -25 }) {
     this.scene = scene;
 
     // Create position vector from input position
