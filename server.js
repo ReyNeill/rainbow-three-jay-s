@@ -7,6 +7,9 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// Store connected players
+const players = {};
+
 // Serve static files
 app.use(express.static("dist"));
 
@@ -19,15 +22,48 @@ app.get("*", (req, res) => {
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
+  // Add new player to players object
+  players[socket.id] = {
+    id: socket.id,
+    position: { x: 0, y: 2, z: 15 },
+    rotation: { x: 0, y: 0, z: 0 },
+    team: Object.keys(players).length % 2 === 0 ? "blue" : "red", // Assign to alternating teams
+  };
+
   // Send welcome message to the newly connected client
   socket.emit("message", "Welcome to Rainbow Three Jay's!");
 
-  // Broadcast to all clients except the sender
+  // Send current players to the new player
+  socket.emit("currentPlayers", players);
+
+  // Broadcast new player to all clients except the sender
+  socket.broadcast.emit("newPlayer", players[socket.id]);
   socket.broadcast.emit("message", `User ${socket.id} joined the game`);
+
+  // Handle player updates
+  socket.on("playerUpdate", (data) => {
+    if (players[socket.id]) {
+      players[socket.id].position = data.position;
+      players[socket.id].rotation = data.rotation;
+
+      // Broadcast player update to all other clients
+      socket.broadcast.emit("playerMoved", {
+        id: socket.id,
+        position: players[socket.id].position,
+        rotation: players[socket.id].rotation,
+      });
+    }
+  });
 
   // Handle disconnection
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
+
+    // Remove player from players object
+    delete players[socket.id];
+
+    // Broadcast to all clients that player has left
+    io.emit("playerDisconnected", socket.id);
     io.emit("message", `User ${socket.id} left the game`);
   });
 });

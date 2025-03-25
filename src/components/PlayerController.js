@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
+import { CollisionDetection } from "../utils/CollisionDetection.js";
 
 export class PlayerController {
-  constructor(camera, domElement) {
+  constructor(camera, domElement, collidableObjects = []) {
     this.camera = camera;
     this.domElement = domElement;
 
@@ -20,8 +21,14 @@ export class PlayerController {
     // Initialize pointer lock controls
     this.controls = new PointerLockControls(this.camera, this.domElement);
 
+    // Collision detection
+    this.collisionDetection = new CollisionDetection(collidableObjects);
+
     // Setup event listeners
     this.setupEventListeners();
+
+    // Instruction text
+    this.showInstructions();
   }
 
   setupEventListeners() {
@@ -33,6 +40,47 @@ export class PlayerController {
     // Setup keyboard controls
     document.addEventListener("keydown", (event) => this.onKeyDown(event));
     document.addEventListener("keyup", (event) => this.onKeyUp(event));
+
+    // Pointer lock change events
+    document.addEventListener("pointerlockchange", () => {
+      if (document.pointerLockElement === this.domElement) {
+        this.hideInstructions();
+      } else {
+        this.showInstructions();
+      }
+    });
+  }
+
+  showInstructions() {
+    let instructions = document.getElementById("instructions");
+    if (!instructions) {
+      instructions = document.createElement("div");
+      instructions.id = "instructions";
+      instructions.style.position = "absolute";
+      instructions.style.top = "50%";
+      instructions.style.left = "50%";
+      instructions.style.transform = "translate(-50%, -50%)";
+      instructions.style.textAlign = "center";
+      instructions.style.color = "white";
+      instructions.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+      instructions.style.padding = "1em";
+      instructions.style.borderRadius = "5px";
+      instructions.innerHTML =
+        "<p>Click to play</p><p>Move: WASD<br>Look: Mouse</p>";
+      document.body.appendChild(instructions);
+    }
+    instructions.style.display = "block";
+  }
+
+  hideInstructions() {
+    const instructions = document.getElementById("instructions");
+    if (instructions) {
+      instructions.style.display = "none";
+    }
+  }
+
+  setCollidableObjects(objects) {
+    this.collisionDetection = new CollisionDetection(objects);
   }
 
   onKeyDown(event) {
@@ -87,6 +135,12 @@ export class PlayerController {
       if (this.moveLeft || this.moveRight) {
         this.velocity.x -= this.direction.x * this.moveSpeed * deltaTime;
       }
+
+      // Check for collisions
+      this.velocity = this.collisionDetection.checkCollision(
+        this.camera.position,
+        this.velocity
+      );
 
       // Move the camera
       this.controls.moveRight(-this.velocity.x * deltaTime);
