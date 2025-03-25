@@ -5,12 +5,12 @@ A web-based 5v5 First Person Shooter game using ThreeJS, incorporating lean mech
 ## Features
 
 - First-person perspective with mouse and keyboard controls
-- Lean mechanics for peeking around corners
-- Basic shooting mechanics with hit detection
+- Lean mechanics for peeking around corners (Q/E keys)
+- Basic shooting mechanics with hit detection (left mouse button)
 - Multiplayer support for up to 10 players (5 per team)
 - Simple 3D map with obstacles and cover
 - Team-based gameplay
-- UI elements including health bars, team indicators, and scoreboard
+- UI elements including crosshair, health indicators, and hit feedback
 
 ## Development Setup
 
@@ -26,6 +26,8 @@ A web-based 5v5 First Person Shooter game using ThreeJS, incorporating lean mech
    ```bash
    npm install
    ```
+3. Add sound files:
+   - Place a "gunshot.mp3" file in the public/sounds directory
 
 ### Running the development server
 
@@ -56,9 +58,18 @@ A web-based 5v5 First Person Shooter game using ThreeJS, incorporating lean mech
    npm start
    ```
 
+## Controls
+
+- **WASD**: Move
+- **Mouse**: Look around
+- **Q/E**: Lean left/right
+- **Space**: Jump
+- **Left Mouse Button**: Shoot
+
 ## Project Structure
 
 - `/public` - Static assets
+  - `/sounds` - Sound effects
 - `/src` - Source code
   - `/components` - Game components
   - `/utils` - Utility functions

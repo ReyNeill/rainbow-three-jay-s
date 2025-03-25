@@ -29,6 +29,7 @@ io.on("connection", (socket) => {
     rotation: { x: 0, y: 0, z: 0 },
     leanAmount: 0,
     team: Object.keys(players).length % 2 === 0 ? "blue" : "red", // Assign to alternating teams
+    health: 100, // Add health property
   };
 
   // Send welcome message to the newly connected client
@@ -56,6 +57,64 @@ io.on("connection", (socket) => {
         rotation: players[socket.id].rotation,
         leanAmount: players[socket.id].leanAmount,
       });
+    }
+  });
+
+  // Handle player shooting events
+  socket.on("playerShot", (data) => {
+    const targetId = data.targetId;
+    const damage = data.damage || 25; // Default damage if not specified
+
+    // Skip if target is the dummy player (it's handled client-side)
+    if (targetId === "dummy") {
+      return;
+    }
+
+    // Check if target player exists
+    if (players[targetId]) {
+      // Get shooter and target teams
+      const shooterTeam = players[socket.id]?.team;
+      const targetTeam = players[targetId].team;
+
+      // Skip damage if friendly fire (same team)
+      if (shooterTeam === targetTeam) {
+        console.log("Friendly fire detected, no damage applied");
+        return;
+      }
+
+      // Apply damage to target player
+      players[targetId].health -= damage;
+
+      // Check if player is dead
+      if (players[targetId].health <= 0) {
+        players[targetId].health = 0;
+
+        // Reset player health after 5 seconds (simple respawn mechanic)
+        setTimeout(() => {
+          if (players[targetId]) {
+            players[targetId].health = 100;
+            io.to(targetId).emit("playerRespawned");
+          }
+        }, 5000);
+      }
+
+      // Send hit notification to target player
+      io.to(targetId).emit("playerHit", {
+        shooterId: socket.id,
+        damage: damage,
+        remainingHealth: players[targetId].health,
+      });
+
+      // Send hit confirmation to shooter
+      socket.emit("hitConfirmed", {
+        targetId: targetId,
+        damage: damage,
+        remainingHealth: players[targetId].health,
+      });
+
+      console.log(
+        `Player ${socket.id} hit player ${targetId} for ${damage} damage. Remaining health: ${players[targetId].health}`
+      );
     }
   });
 

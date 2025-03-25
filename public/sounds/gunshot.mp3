@@ -1,0 +1,70 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+<meta name="description" content="" />
+<meta name="keywords" content="" />
+<link rel="image_src" href="https://www.soundjay.com/graphics/thumbnail.jpg" />
+<link href="https://www.soundjay.com/style.css" rel="stylesheet" type="text/css" media="all" />
+<title>Error 404</title>
+</head>
+
+<body>
+<table id="main" width="1000" border="0" cellpadding="0" cellspacing="0">
+  <tr> 
+    <td height="110" colspan="4" rowspan="2"> <img src="https://www.soundjay.com/graphics/sitename.jpg" width="222" height="110" /></td>
+    <td height="90" colspan="2"> <img src="https://www.soundjay.com/graphics/slogan.jpg" width="778" height="90" /></td>
+    <td width="4" height="90"> <img src="https://www.soundjay.com/graphics/bg_1.jpg" width="3" height="90" alt="" /></td>
+  </tr>
+  <tr> 
+    <td align="right" valign="middle" height="20" colspan="2" id="menu_top"> <div id="menu_hor"><a href="https://www.soundjay.com/index.html">home</a></div></td>
+    <td width="4" height="20"> <img src="https://www.soundjay.com/graphics/bg_3.gif" width="3" height="20" alt="" /></td>
+  </tr>
+  <tr> 
+    <td id="bg_06" width="3" height="415" rowspan="2"> <img src="https://www.soundjay.com/graphics/spacer.gif" alt="" /></td>
+    <td id="menu_left" height="388" colspan="2" align="left" valign="top"> <div id="menu_vert"> 
+        <div align="left"> </div>
+      </div></td>
+    <td id="contents" height="415" colspan="3" rowspan="2" align="left" valign="top" bgcolor="#ffffff"><div class="heading"> 
+        <table width="778" border="0" cellspacing="0" cellpadding="0">
+          <tr> 
+            <td width="60"><div align="center"><img src="https://www.soundjay.com/audio-icons/404.jpg" width="50" height="50" style="border-style: none" alt="misc sounds" /> 
+              </div></td>
+            <td width="653">
+            	<h1>Error 404 - Page Not Found</h1>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div class="top_text">
+      <br /><br />
+      Please check the URL to ensure that the path is correct, or go <a href="https://www.soundjay.com/index.html">Home Page</a>.
+      </div>
+    </td>
+    
+    <td id="bg_09" width="4" height="415" rowspan="2"> <img src="https://www.soundjay.com/graphics/spacer.gif" alt="" /></td>
+  </tr>
+  <tr> 
+    <td id="bg_10" height="27" colspan="2" align="left" valign="bottom"> <img src="https://www.soundjay.com/graphics/spacer.gif" alt="" /></td>
+  </tr>
+  <tr> 
+    <td height="24" colspan="2"> <img src="https://www.soundjay.com/graphics/bg_8.jpg" width="9" height="24" alt="" /></td>
+    <td width="171" height="24"> <img src="https://www.soundjay.com/graphics/bg_9.jpg" width="171" height="24" alt="" /></td>
+    <td id="copy_notice" height="24" colspan="2" valign="top">
+<div id="copyright"><a href="tos.html">Terms of Use</a> | <a href="privacy.html">Privacy Policy</a> | <a href="contact.html">Contact Us</a> | Copyright &copy; 2023 SoundJay.com</div>
+    </td>
+    <td height="24" colspan="2"> <img src="https://www.soundjay.com/graphics/bg_11.jpg" width="10" height="24" alt="" /></td>
+  </tr>
+  <tr> 
+    <td width="3" height="1"> <img src="https://www.soundjay.com/graphics/spacer.gif" width="3" height="1" alt="" /></td>
+    <td width="6" height="1"> <img src="https://www.soundjay.com/graphics/bg_12.gif" width="6" height="1" alt="" /></td>
+    <td width="171" height="1" bgcolor="#666666"> <img src="https://www.soundjay.com/graphics/spacer.gif" width="171" height="1" alt="" /></td>
+    <td width="46" height="1" bgcolor="#666666"> <img src="https://www.soundjay.com/graphics/spacer.gif" width="42" height="1" alt="" /></td>
+    <td width="849" height="1" bgcolor="#666666"> <img src="https://www.soundjay.com/graphics/spacer.gif" width="518" height="1" alt="" /></td>
+    <td width="7" height="1"> <img src="https://www.soundjay.com/graphics/bg_13.gif" width="7" height="1" alt="" /></td>
+    <td width="4" height="1"> <img src="https://www.soundjay.com/graphics/spacer.gif" alt="" /></td>
+  </tr>
+</table>
+
+</body>
+</html>
