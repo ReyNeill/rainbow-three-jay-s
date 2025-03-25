@@ -268,12 +268,12 @@ testingInstructions.style.fontSize = "16px";
 testingInstructions.style.zIndex = "1000";
 testingInstructions.innerHTML = `
   <h3 style="color: #ff9900; margin: 0 0 10px 0;">Shooting Test Arena</h3>
-  <p>- Look for the <span style="color: red;">RED</span> and <span style="color: blue;">BLUE</span> dummy players with arrows</p>
+  <p>- Look for the <span style="color: yellow;">YELLOW</span> dummy players</p>
+  <p>- Try to hit the <span style="color: red;">RED</span> moving targets - they respawn after 5 seconds</p>
   <p>- Click to lock pointer and enable shooting</p>
   <p>- WASD to move, Space to jump</p>
   <p>- Q/E to lean left/right</p>
   <p>- Left-click to shoot targets and dummies</p>
-  <p>- Targets and dummies should flash when hit</p>
 `;
 document.body.appendChild(testingInstructions);
 
@@ -290,6 +290,9 @@ function animate(time) {
 
   // Update player controller
   playerController.update(deltaTime);
+
+  // Update moving targets
+  gameMap.updateTargets(deltaTime);
 
   // Update weapon system if needed
   weaponSystem.update();

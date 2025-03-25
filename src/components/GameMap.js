@@ -53,21 +53,15 @@ export class GameMap {
   }
 
   createTargets() {
-    // Create targets in different positions
+    // Create fewer targets in different positions
     const targetPositions = [
-      { x: -30, y: 2.0, z: -25 },
-      { x: -20, y: 2.0, z: -25 },
-      { x: -10, y: 2.0, z: -25 },
-      { x: 0, y: 2.0, z: -25 },
-      { x: 10, y: 2.0, z: -25 },
-      { x: 20, y: 2.0, z: -25 },
-      { x: 30, y: 2.0, z: -25 },
-      // Elevated targets
-      { x: -25, y: 3, z: -25 },
-      { x: -15, y: 4, z: -25 },
-      { x: 5, y: 3.5, z: -25 },
-      { x: 15, y: 4, z: -25 },
-      { x: 25, y: 3, z: -25 },
+      // Different Z depths for more interesting movement
+      { x: -20, y: 2.0, z: -20 },
+      { x: 0, y: 3.0, z: -25 },
+      { x: 20, y: 2.0, z: -30 },
+      // Elevated targets on sides
+      { x: -15, y: 5, z: -25 },
+      { x: 15, y: 5, z: -25 },
     ];
 
     targetPositions.forEach((pos) => {
@@ -110,5 +104,12 @@ export class GameMap {
 
   getTargets() {
     return this.targets;
+  }
+
+  // Add method to update targets
+  updateTargets(deltaTime) {
+    this.targets.forEach((target) => {
+      target.update(deltaTime);
+    });
   }
 }
