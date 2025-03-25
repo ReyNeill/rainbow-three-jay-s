@@ -68,6 +68,16 @@ const dummyPlayer = new DummyPlayer(scene, { x: 0, y: 2, z: -15 });
 // Add another dummy to the side for easier testing
 const dummyPlayer2 = new DummyPlayer(scene, { x: 5, y: 2, z: -15 });
 
+// Add dummy players to player controller's collidable objects
+const dummyMeshes1 = dummyPlayer.getMeshes();
+const dummyMeshes2 = dummyPlayer2.getMeshes();
+// Update the player controller's collidable objects to include dummy players
+playerController.setCollidableObjects([
+  ...gameMap.getCollidableObjects(),
+  ...dummyMeshes1,
+  ...dummyMeshes2,
+]);
+
 // Socket.io connection
 const socket = io();
 
@@ -92,6 +102,24 @@ if (dummyPlayer2) {
     ...dummyMeshes,
   ];
 }
+
+// Sync function to ensure weapon system and player controller have the same collidable objects
+function syncCollidableObjects() {
+  // Get all collidable objects from all sources
+  const allCollidables = [
+    ...gameMap.getCollidableObjects(),
+    ...otherPlayers.getPlayerObjects(),
+    ...dummyPlayer.getMeshes(),
+    ...dummyPlayer2.getMeshes(),
+  ];
+
+  // Update both systems
+  playerController.setCollidableObjects(allCollidables);
+  weaponSystem.setCollidableObjects(allCollidables);
+}
+
+// Initial sync
+syncCollidableObjects();
 
 // Handle window resize
 window.addEventListener("resize", () => {
@@ -155,11 +183,8 @@ socket.on("currentPlayers", (players) => {
   // Only add other players, not ourselves
   otherPlayers.setPlayers(otherPlayersData);
 
-  // Update collidable objects for weapon system to include player meshes
-  weaponSystem.setCollidableObjects([
-    ...gameMap.getCollidableObjects(),
-    ...otherPlayers.getPlayerObjects(),
-  ]);
+  // Update collidable objects
+  syncCollidableObjects();
 });
 
 // Handle new player joining
@@ -168,11 +193,8 @@ socket.on("newPlayer", (playerData) => {
   if (playerData.id !== socket.id) {
     otherPlayers.addPlayer(playerData);
 
-    // Update collidable objects for weapon system
-    weaponSystem.setCollidableObjects([
-      ...gameMap.getCollidableObjects(),
-      ...otherPlayers.getPlayerObjects(),
-    ]);
+    // Update collidable objects
+    syncCollidableObjects();
   }
 });
 
@@ -185,11 +207,8 @@ socket.on("playerMoved", (playerData) => {
 socket.on("playerDisconnected", (playerId) => {
   otherPlayers.removePlayer(playerId);
 
-  // Update collidable objects for weapon system
-  weaponSystem.setCollidableObjects([
-    ...gameMap.getCollidableObjects(),
-    ...otherPlayers.getPlayerObjects(),
-  ]);
+  // Update collidable objects
+  syncCollidableObjects();
 });
 
 // Handle when player is hit by another player

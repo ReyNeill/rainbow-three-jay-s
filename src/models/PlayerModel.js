@@ -20,39 +20,58 @@ export class PlayerModel {
     this.updateHealth(this.options.health);
   }
 
+  // Generate material based on team color
+  getTeamMaterial(isDarker = false) {
+    let color;
+
+    // Select base color based on team
+    switch (this.options.team) {
+      case "red":
+        color = isDarker ? 0xcc0000 : 0xff0000;
+        break;
+      case "blue":
+        color = isDarker ? 0x0000cc : 0x0000ff;
+        break;
+      case "yellow":
+        color = isDarker ? 0xcccc00 : 0xffff00;
+        break;
+      default:
+        color = isDarker ? 0x444444 : 0x888888;
+    }
+
+    return new THREE.MeshBasicMaterial({ color });
+  }
+
   createModel() {
-    // Create model group
-    this.modelGroup = new THREE.Group();
-
-    // Body: simple box
-    const bodyGeometry = new THREE.BoxGeometry(1, 2, 1);
-    const bodyMaterial = new THREE.MeshBasicMaterial({
-      color: this.options.team === "red" ? 0xff0000 : 0x0000ff,
-    });
+    // Create body
+    const bodyGeometry = new THREE.CapsuleGeometry(0.4, 1.2, 4, 8);
+    const bodyMaterial = this.getTeamMaterial();
     this.bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    this.bodyMesh.position.y = 1; // Stand on the ground
 
-    // Add user data for hit detection
+    // Add player ID to userData for hit detection
     this.bodyMesh.userData.playerId = this.options.playerId;
-    this.bodyMesh.userData.isPlayer = true;
+    this.bodyMesh.userData.isFullyCollidable = true; // Mark as fully collidable
 
-    // Head: smaller box on top
-    const headGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-    const headMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    // Create head
+    const headGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+    const headMaterial = this.getTeamMaterial(true); // Slightly darker
     this.headMesh = new THREE.Mesh(headGeometry, headMaterial);
-    this.headMesh.position.set(0, 2.3, 0.2); // On top of body
+    this.headMesh.position.y = 0.9; // Place on top of body
 
-    // Add user data for hit detection
+    // Add player ID to userData for hit detection
     this.headMesh.userData.playerId = this.options.playerId;
-    this.headMesh.userData.isPlayer = true;
+    this.headMesh.userData.isFullyCollidable = true; // Mark as fully collidable
+
+    // Create group to hold all parts
+    this.modelGroup = new THREE.Group();
+    this.modelGroup.add(this.bodyMesh);
+    this.modelGroup.add(this.headMesh);
 
     // Add health bar
     this.healthBarGroup = this.createHealthBar();
     this.healthBarGroup.position.y = 3; // Place above head
 
     // Add meshes to group
-    this.modelGroup.add(this.bodyMesh);
-    this.modelGroup.add(this.headMesh);
     this.modelGroup.add(this.healthBarGroup);
 
     // Set position

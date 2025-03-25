@@ -34,9 +34,13 @@ export class DummyModel extends PlayerModel {
 
     // Override the body color to yellow
     this.bodyMesh.material = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+    // Ensure body is marked as fully collidable
+    this.bodyMesh.userData.isFullyCollidable = true;
 
     // Make the head a different yellow shade to still have contrast
     this.headMesh.material = new THREE.MeshBasicMaterial({ color: 0xddaa00 });
+    // Ensure head is marked as fully collidable
+    this.headMesh.userData.isFullyCollidable = true;
   }
 
   addDummyLabel() {
