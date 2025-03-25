@@ -27,6 +27,7 @@ io.on("connection", (socket) => {
     id: socket.id,
     position: { x: 0, y: 2, z: 15 },
     rotation: { x: 0, y: 0, z: 0 },
+    leanAmount: 0,
     team: Object.keys(players).length % 2 === 0 ? "blue" : "red", // Assign to alternating teams
   };
 
@@ -43,14 +44,17 @@ io.on("connection", (socket) => {
   // Handle player updates
   socket.on("playerUpdate", (data) => {
     if (players[socket.id]) {
+      // Update player data with what client sent
       players[socket.id].position = data.position;
       players[socket.id].rotation = data.rotation;
+      players[socket.id].leanAmount = data.leanAmount;
 
       // Broadcast player update to all other clients
       socket.broadcast.emit("playerMoved", {
         id: socket.id,
         position: players[socket.id].position,
         rotation: players[socket.id].rotation,
+        leanAmount: players[socket.id].leanAmount,
       });
     }
   });

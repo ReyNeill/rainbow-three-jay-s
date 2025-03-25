@@ -65,6 +65,7 @@ socket.on("connect", () => {
   setInterval(() => {
     const position = playerController.getPosition();
     const rotation = playerController.getRotation();
+    const leanAmount = playerController.getLeanAmount();
 
     socket.emit("playerUpdate", {
       position: {
@@ -77,6 +78,7 @@ socket.on("connect", () => {
         y: rotation.y,
         z: rotation.z,
       },
+      leanAmount: leanAmount,
     });
   }, 100); // Send update every 100ms
 });
