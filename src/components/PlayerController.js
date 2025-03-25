@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import { CollisionDetection } from "../utils/CollisionDetection.js";
 import { VaultingSystem } from "./VaultingSystem.js";
+import { GunModel } from "../models/GunModel.js";
 
 export class PlayerController {
   constructor(
@@ -53,6 +54,20 @@ export class PlayerController {
 
     // Vaulting System
     this.vaultingSystem = new VaultingSystem(collidableObjects, this.uiManager);
+
+    // --- Add First-Person Gun Model ---
+    this.fpGun = new GunModel();
+    this.fpGunMesh = this.fpGun.getMesh();
+    // Position the gun in the camera's view (bottom right)
+    this.fpGunMesh.position.set(0.2, -0.2, -0.5); // Adjust x, y, z as needed
+    this.fpGunMesh.rotation.y = -Math.PI / 20; // Slight angle
+    this.fpGunMesh.scale.set(0.8, 0.8, 0.8); // Adjust scale for first-person view
+    this.camera.add(this.fpGunMesh); // Add gun as child of camera
+    // --- End First-Person Gun Model ---
+
+    // --- Add Lean Mode Setting ---
+    this.leanMode = "toggle"; // 'toggle' or 'hold'
+    // --- End Lean Mode Setting ---
 
     // Setup event listeners
     this.setupEventListeners();
@@ -118,12 +133,8 @@ export class PlayerController {
 
   update(deltaTime) {
     // Update cameraGroup position to follow player's eye level first
-    const eyePosition = this.truePosition
-      .clone()
-      .add(new THREE.Vector3(0, this.headHeightOffset, 0));
-    this.cameraGroup.position.copy(eyePosition);
-
-    // PointerLockControls updates the cameraGroup's rotation internally
+    // This needs to happen AFTER truePosition might be updated by vaulting
+    // Moved this down slightly
 
     if (this.inputManager.getIsPointerLocked()) {
       // --- Handle Input ---
@@ -131,46 +142,82 @@ export class PlayerController {
       const moveB = this.inputManager.isActionActive("moveBackward");
       const moveL = this.inputManager.isActionActive("moveLeft");
       const moveR = this.inputManager.isActionActive("moveRight");
-      const leanL = this.inputManager.isActionPressed("leanLeft");
-      const leanR = this.inputManager.isActionPressed("leanRight");
-      const vaultPressed = this.inputManager.isActionPressed("vault"); // Check if pressed this frame
+      const vaultPressed = this.inputManager.isActionPressed("vault");
+      const toggleLeanModePressed =
+        this.inputManager.isActionPressed("toggleLeanMode"); // New input
 
-      if (leanL) {
-        this.leanState = this.leanState === "left" ? "center" : "left";
+      // --- Toggle Lean Mode Setting ---
+      if (toggleLeanModePressed) {
+        this.leanMode = this.leanMode === "toggle" ? "hold" : "toggle";
+        // Optionally, provide feedback via UIManager
+        this.uiManager.showNotification(
+          `Lean Mode: ${this.leanMode.toUpperCase()}`
+        );
+        // Reset lean state when switching modes to avoid getting stuck
+        this.leanState = "center";
       }
-      if (leanR) {
-        this.leanState = this.leanState === "right" ? "center" : "right";
+      // --- End Toggle Lean Mode Setting ---
+
+      // --- Handle Lean Input based on Mode ---
+      if (this.leanMode === "toggle") {
+        const leanLPressed = this.inputManager.isActionPressed("leanLeft");
+        const leanRPressed = this.inputManager.isActionPressed("leanRight");
+        if (leanLPressed) {
+          this.leanState = this.leanState === "left" ? "center" : "left";
+        }
+        if (leanRPressed) {
+          this.leanState = this.leanState === "right" ? "center" : "right";
+        }
+      } else {
+        // Hold mode
+        const leanLActive = this.inputManager.isActionActive("leanLeft");
+        const leanRActive = this.inputManager.isActionActive("leanRight");
+        if (leanLActive) {
+          this.leanState = "left";
+        } else if (leanRActive) {
+          this.leanState = "right";
+        } else {
+          this.leanState = "center";
+        }
       }
+      // --- End Handle Lean Input ---
 
       // --- Update Vaulting System ---
       const vaultPosition = this.vaultingSystem.updateVault(deltaTime);
-
-      // --- Check 1: Is vault active OR did it just finish? ---
       if (vaultPosition) {
         // Vault is in progress or just completed this frame
-        this.truePosition.copy(vaultPosition); // Apply the calculated vault position
+
+        // FIX: Apply the calculated world vault position to truePosition
+        this.truePosition.copy(vaultPosition);
+
+        // Reset velocity during vault to prevent interference
+        this.velocity.set(0, 0, 0);
         this.isOnGround = false; // Assume not grounded during vault motion
-        this.velocity.set(0, 0, 0); // Stop any other velocity
 
-        // Update lean visuals and camera group position based on new vault position
-        this.updateLean(deltaTime);
-        this.cameraGroup.position
-          .copy(this.truePosition)
+        // Update lean smoothly back to center during vault
+        this.leanAmount = THREE.MathUtils.lerp(
+          this.leanAmount,
+          0,
+          deltaTime * this.leanSpeed * 2 // Faster return to center
+        );
+        this.updateLean(deltaTime); // Apply visual lean offset/roll to camera
+
+        // Update cameraGroup position based on the NEW truePosition from vaulting
+        const eyePosition = this.truePosition
+          .clone()
           .add(new THREE.Vector3(0, this.headHeightOffset, 0));
+        this.cameraGroup.position.copy(eyePosition);
 
-        // If the vault is still ongoing after the update, skip the rest
+        // If the vault is still ongoing after the update, skip the rest of physics
         if (this.vaultingSystem.isVaulting) {
           return;
         }
-        // If vault just finished (isVaulting is now false), we've set the final position.
-        // Allow the rest of the update (gravity/collision check) to run to properly ground the player.
+        // If vault just finished, allow rest of update to run for grounding
       }
+      // --- End Vaulting Update ---
 
-      // --- Check 3 (Moved Earlier): Check for vault opportunities (if not vaulting) ---
-      // Run this *before* attempting to start the vault, so 'canVault' is up-to-date
-      // (respecting its internal throttle)
+      // --- Check for vault opportunities (Only if not currently vaulting) ---
       if (!this.vaultingSystem.isVaulting) {
-        // Only check if not already vaulting
         this.vaultingSystem.checkForVaultableObjects(
           this.truePosition,
           this.cameraGroup.quaternion,
@@ -178,27 +225,24 @@ export class PlayerController {
         );
       }
 
-      // --- Check 2 (Modified Condition): Attempt to start a vault ---
-      // Check vaultPressed AND the current state of vaultingSystem.canVault
+      // --- Attempt to start a vault (Only if not currently vaulting) ---
       if (
         vaultPressed &&
         this.vaultingSystem.canVault &&
         !this.vaultingSystem.isVaulting
       ) {
-        // attemptVault internally checks canVault & !isVaulting again, but checking here is clearer
         const vaultStarted = this.vaultingSystem.attemptVault(
           this.truePosition
         );
         if (vaultStarted) {
-          // Vault successfully initiated
           this.velocity.set(0, 0, 0); // Stop current momentum
           this.isOnGround = false; // Immediately leave ground state
-          // Skip the rest of this frame's movement/collision updates
-          return;
+          return; // Skip the rest of this frame's physics
         }
       }
+      // --- End Vaulting Start ---
 
-      // --- Calculate Movement Intent ---
+      // --- Calculate Movement Intent (Only if not vaulting) ---
       this.velocity.x -= this.velocity.x * 10.0 * deltaTime;
       this.velocity.z -= this.velocity.z * 10.0 * deltaTime;
 
@@ -227,29 +271,42 @@ export class PlayerController {
       this.velocity.x = targetVelocityX;
       this.velocity.z = targetVelocityZ;
 
-      // --- Apply Gravity ---
-      // Gravity applies if not vaulting (vaulting handles its own Y movement)
+      // --- Apply Gravity (Only if not vaulting) ---
       this.velocity.y -= this.gravity * deltaTime;
 
-      // --- Collision Detection and Response ---
+      // --- Collision Detection and Response (Only if not vaulting) ---
       const collisionResult = this.collisionDetection.checkCollision(
         this.truePosition,
-        this.velocity, // Pass current velocity
+        this.velocity,
         deltaTime
       );
-
-      this.velocity.copy(collisionResult.velocity); // Apply collision adjustments
+      this.velocity.copy(collisionResult.velocity);
       this.isOnGround = collisionResult.onGround;
-
-      // Stick to ground if landed (including after vault)
       if (this.isOnGround && this.velocity.y < 0) {
         this.velocity.y = 0;
       }
 
-      // --- Update Position ---
+      // --- Update Position (Only if not vaulting) ---
       this.truePosition.add(this.velocity.clone().multiplyScalar(deltaTime));
 
+      // --- Prevent falling through floor (Only if not vaulting) ---
+      // Use a safe minimum Y based on player height
+      const minY = 0; // Ground level is 0, player center is 0.8 when grounded
+      if (this.truePosition.y < this.playerHeight / 2) {
+        this.truePosition.y = this.playerHeight / 2;
+        this.velocity.y = 0;
+        this.isOnGround = true; // Force ground state if below minimum
+      }
+
+      // --- Update Camera Group Position (If not vaulting) ---
+      // This needs to run *after* truePosition is updated by regular movement
+      const eyePosition = this.truePosition
+        .clone()
+        .add(new THREE.Vector3(0, this.headHeightOffset, 0));
+      this.cameraGroup.position.copy(eyePosition);
+
       // --- Update Camera Lean (Local Offset/Roll) ---
+      // This runs regardless of vaulting, using the current leanAmount
       this.updateLean(deltaTime);
     } else {
       // Not pointer locked
@@ -259,6 +316,7 @@ export class PlayerController {
         this.camera.rotation.z !== 0 ||
         this.camera.position.lengthSq() > 0
       ) {
+        this.leanState = "center"; // Ensure state resets too
         this.leanAmount = 0;
         this.camera.rotation.z = 0;
         this.camera.position.set(0, 0, 0);
@@ -277,5 +335,10 @@ export class PlayerController {
 
   getLeanAmount() {
     return this.leanAmount;
+  }
+
+  // Add a method to get the first-person gun model instance
+  getFPGun() {
+    return this.fpGun;
   }
 }

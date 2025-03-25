@@ -9,7 +9,8 @@ export class WeaponSystem {
     socket,
     inputManager,
     uiManager,
-    dummyPlayer = null
+    dummyPlayer = null,
+    fpGun = null
   ) {
     this.scene = scene;
     this.camera = camera;
@@ -18,6 +19,7 @@ export class WeaponSystem {
     this.inputManager = inputManager;
     this.uiManager = uiManager;
     this.dummyPlayer = dummyPlayer;
+    this.fpGun = fpGun;
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(0, 0); // Center of screen
     this.shooting = false;
@@ -93,7 +95,7 @@ export class WeaponSystem {
       this.shootSound.play();
     }
 
-    // Create muzzle flash visual effect (simple implementation)
+    // Create muzzle flash visual effect
     this.createMuzzleFlash();
 
     this.performRaycast();
@@ -205,17 +207,26 @@ export class WeaponSystem {
 
     const flash = new THREE.Mesh(geometry, material);
 
-    // Position slightly in front of camera
-    const flashPos = new THREE.Vector3(0, 0, -1).applyQuaternion(
-      this.camera.quaternion
-    );
-    flash.position.copy(this.camera.position).add(flashPos);
+    // Position at the gun's barrel tip if available, otherwise default
+    let flashPos;
+    if (this.fpGun) {
+      flashPos = this.fpGun.getBarrelTipPosition(); // Get world position of barrel tip
+    } else {
+      // Fallback: Position slightly in front of camera
+      flashPos = new THREE.Vector3(0, 0, -0.5).applyMatrix4(
+        this.camera.matrixWorld
+      );
+    }
+    flash.position.copy(flashPos);
 
     this.scene.add(flash);
 
     // Remove after short time
     setTimeout(() => {
-      this.scene.remove(flash);
+      if (flash.parent) {
+        // Check if still attached before removing
+        this.scene.remove(flash);
+      }
       geometry.dispose();
       material.dispose();
     }, 50);

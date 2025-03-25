@@ -2,6 +2,7 @@ export class UIManager {
   constructor() {
     this.elements = {};
     this.createElements();
+    this.notificationTimeout = null; // For hiding notifications
   }
 
   createElements() {
@@ -99,6 +100,23 @@ export class UIManager {
           <p>- Left-click to shoot targets and dummies</p>
         `;
     document.body.appendChild(this.elements.testingInstructions);
+
+    // --- Notification Area ---
+    this.elements.notificationArea = document.createElement("div");
+    this.elements.notificationArea.style.position = "absolute";
+    this.elements.notificationArea.style.top = "10px";
+    this.elements.notificationArea.style.left = "50%";
+    this.elements.notificationArea.style.transform = "translateX(-50%)";
+    this.elements.notificationArea.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+    this.elements.notificationArea.style.color = "white";
+    this.elements.notificationArea.style.padding = "8px 15px";
+    this.elements.notificationArea.style.borderRadius = "5px";
+    this.elements.notificationArea.style.fontSize = "16px";
+    this.elements.notificationArea.style.display = "none"; // Initially hidden
+    this.elements.notificationArea.style.zIndex = "1002"; // Above other elements
+    this.elements.notificationArea.style.textAlign = "center";
+    document.body.appendChild(this.elements.notificationArea);
+    // --- End Notification Area ---
   }
 
   // --- Control Methods ---
@@ -181,4 +199,24 @@ export class UIManager {
       this.setVaultPromptVisible(false); // Hide vault prompt if lock is lost
     }
   }
+
+  // --- Add Notification Method ---
+  showNotification(message, duration = 2000) {
+    if (this.elements.notificationArea) {
+      this.elements.notificationArea.textContent = message;
+      this.elements.notificationArea.style.display = "block";
+
+      // Clear previous timeout if any
+      if (this.notificationTimeout) {
+        clearTimeout(this.notificationTimeout);
+      }
+
+      // Set new timeout to hide
+      this.notificationTimeout = setTimeout(() => {
+        this.elements.notificationArea.style.display = "none";
+        this.notificationTimeout = null;
+      }, duration);
+    }
+  }
+  // --- End Notification Method ---
 }

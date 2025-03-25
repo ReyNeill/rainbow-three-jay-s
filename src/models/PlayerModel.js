@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GunModel } from "./GunModel.js"; // Import GunModel
 
 export class PlayerModel {
   constructor(scene, position = { x: 0, y: 0.8, z: 0 }, options = {}) {
@@ -72,6 +73,18 @@ export class PlayerModel {
     this.modelGroup = new THREE.Group();
     this.modelGroup.add(this.bodyMesh);
     this.modelGroup.add(this.headMesh);
+
+    // --- Add Gun Model ---
+    this.gun = new GunModel({ color: 0x555555 }); // Slightly lighter grey for visibility
+    const gunMesh = this.gun.getMesh();
+
+    // Position the gun relative to the body (approximate holding position)
+    gunMesh.position.set(0.3, 0.2, -0.3); // Right side, slightly forward and up
+    gunMesh.rotation.y = -Math.PI / 20; // Slight angle outwards
+    gunMesh.scale.set(1.2, 1.2, 1.2); // Make it slightly larger for third-person view
+
+    this.modelGroup.add(gunMesh);
+    // --- End Gun Model ---
 
     // Add health bar - Adjust position relative to new head height
     this.healthBarGroup = this.createHealthBar();
@@ -165,6 +178,8 @@ export class PlayerModel {
     }
 
     if (rotation) {
+      // Apply rotation only to the main group (body, head, healthbar)
+      // Keep gun rotation relative to the body/group
       this.modelGroup.rotation.set(rotation.x, rotation.y, rotation.z);
     }
 
@@ -175,20 +190,43 @@ export class PlayerModel {
   }
 
   applyLean(leanAmount) {
-    // Apply rotation for leaning
+    // Apply rotation for leaning to body and head
     this.bodyMesh.rotation.z = (-leanAmount * Math.PI) / 12;
+    this.headMesh.rotation.z = (-leanAmount * Math.PI) / 12; // Lean head too
 
     // Apply horizontal offset for leaning (visual effect only)
-    this.bodyMesh.position.x = leanAmount * 0.5;
+    const leanOffset = leanAmount * 0.5;
+    this.bodyMesh.position.x = leanOffset;
+    this.headMesh.position.x = leanOffset; // Offset head too
+
+    // Keep gun attached relative to the leaning body/group
+    // No need to adjust gun position/rotation here if it's a child of modelGroup
   }
 
-  // Return all meshes for hit detection
+  // Return all meshes for hit detection (exclude gun)
   getMeshes() {
+    // Only body and head should be used for hit detection
     return [this.bodyMesh, this.headMesh];
   }
 
   // Clean up resources
   dispose() {
+    // Dispose gun model resources
+    if (this.gun) {
+      this.gun.dispose();
+    }
+    // Remove the main group from the scene
     this.scene.remove(this.modelGroup);
+    // Dispose geometries and materials of body, head, healthbar
+    this.bodyMesh.geometry.dispose();
+    this.bodyMesh.material.dispose();
+    this.headMesh.geometry.dispose();
+    this.headMesh.material.dispose();
+    this.healthBarGroup.traverse((child) => {
+      if (child.isMesh) {
+        child.geometry.dispose();
+        child.material.dispose();
+      }
+    });
   }
 }

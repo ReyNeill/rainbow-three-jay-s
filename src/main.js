@@ -85,15 +85,16 @@ playerController.setCollidableObjects([
 // Socket.io connection
 const socket = io();
 
-// Initialize weapon system with managers
+// Initialize weapon system with managers AND fpGun
 const weaponSystem = new WeaponSystem(
   scene,
   camera,
-  [],
+  [], // Initial collidables, will be synced
   socket,
   inputManager,
   uiManager,
-  dummyPlayer
+  dummyPlayer,
+  playerController.getFPGun() // Pass the first-person gun instance
 );
 
 // Pass the target instances to weapon system
@@ -237,19 +238,47 @@ socket.on("hitConfirmed", (data) => {
   }
 });
 
+// --- Update Testing Instructions Text ---
+if (uiManager.elements.testingInstructions) {
+  uiManager.elements.testingInstructions.innerHTML = `
+          <h3 style="color: #ff9900; margin: 0 0 10px 0;">Shooting Test Arena</h3>
+          <p>- Look for the <span style="color: yellow;">YELLOW</span> dummy players</p>
+          <p>- Try to hit the <span style="color: red;">RED</span> moving targets - they respawn after 5 seconds</p>
+          <p>- Click to lock pointer and enable shooting</p>
+          <p>- WASD to move, Space to vault over obstacles</p>
+          <p>- Q/E to lean (Mode: <span id="lean-mode-display">TOGGLE</span>)</p>
+          <p>- L to toggle Lean Mode (Hold/Toggle)</p>
+          <p>- Left-click to shoot targets and dummies</p>
+        `;
+  // Add an ID to update the mode display easily if needed, or use showNotification
+}
+// --- End Update Testing Instructions Text ---
+
 // Game loop variables
 let lastTime = 0;
+let lastLeanMode = playerController.leanMode; // Track lean mode for UI update
 
 // Animation loop
 function animate(time) {
   requestAnimationFrame(animate);
 
   // Calculate delta time in seconds
-  const deltaTime = (time - lastTime) / 1000;
+  const deltaTime = (time - lastTime) / 1000 || 0; // Prevent NaN on first frame
   lastTime = time;
 
   // Update player controller
   playerController.update(deltaTime);
+
+  // --- Update Lean Mode Display in Instructions (Optional) ---
+  if (playerController.leanMode !== lastLeanMode) {
+    lastLeanMode = playerController.leanMode;
+    const leanModeDisplay = document.getElementById("lean-mode-display");
+    if (leanModeDisplay) {
+      leanModeDisplay.textContent = lastLeanMode.toUpperCase();
+    }
+    // UIManager.showNotification is already called in PlayerController
+  }
+  // --- End Update Lean Mode Display ---
 
   // Update moving targets
   gameMap.updateTargets(deltaTime);
@@ -264,4 +293,4 @@ function animate(time) {
   inputManager.update();
 }
 
-animate(0);
+animate(0); // Start the loop
