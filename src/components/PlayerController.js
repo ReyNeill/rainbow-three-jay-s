@@ -31,9 +31,8 @@ export class PlayerController {
     this.floorHeight = 2; // Player eye height (camera is at y=2)
     this.jumpVelocity = 10; // Initial jump velocity
 
-    // Camera position and rotation tracking
+    // Camera position tracking
     this.cameraOffset = new THREE.Vector3();
-    this.cameraRotation = new THREE.Euler();
 
     // Track the true player position (unaffected by lean)
     this.truePosition = new THREE.Vector3(0, 2, 15);
@@ -187,23 +186,21 @@ export class PlayerController {
     this.leanAmount = Math.max(-1, Math.min(1, this.leanAmount));
 
     if (this.controls.isLocked) {
-      // Get camera right vector
+      // Get camera's right vector for offset direction
       const right = new THREE.Vector3(1, 0, 0);
       right.applyQuaternion(this.camera.quaternion);
 
-      // Calculate lean offset
+      // Zero out vertical component to keep lean horizontal
+      right.y = 0;
+      if (right.length() > 0) right.normalize();
+
+      // Calculate lean offset - ONLY apply position offset, not rotation
       this.cameraOffset
         .copy(right)
         .multiplyScalar(this.leanAmount * this.maxLeanOffset);
 
-      // Apply lean visually - adjust camera from true position
+      // Update camera position (adding lean offset to the true position)
       this.camera.position.copy(this.truePosition).add(this.cameraOffset);
-
-      // Apply camera rotation for leaning
-      this.camera.rotation.z = -this.leanAmount * this.maxLeanAngle;
-
-      // Remember camera rotation
-      this.cameraRotation.copy(this.camera.rotation);
     }
   }
 
@@ -253,18 +250,20 @@ export class PlayerController {
       // Zero out the Y component to keep movement horizontal
       forward.y = 0;
       right.y = 0;
-      forward.normalize();
-      right.normalize();
+
+      // Only normalize if vectors are not zero length
+      if (forward.length() > 0) forward.normalize();
+      if (right.length() > 0) right.normalize();
 
       // Move the true position directly
-      if (this.velocity.z !== 0) {
+      if (this.velocity.z !== 0 && forward.length() > 0) {
         const moveVec = forward
           .clone()
           .multiplyScalar(-this.velocity.z * deltaTime);
         this.truePosition.add(moveVec);
       }
 
-      if (this.velocity.x !== 0) {
+      if (this.velocity.x !== 0 && right.length() > 0) {
         const moveVec = right
           .clone()
           .multiplyScalar(-this.velocity.x * deltaTime);
@@ -274,7 +273,7 @@ export class PlayerController {
       // Apply vertical movement to true position
       this.truePosition.y += this.velocity.y * deltaTime;
 
-      // Update camera position based on true position and lean
+      // Make the camera follow the player (base position)
       this.updateLean(deltaTime);
     }
   }
@@ -285,6 +284,7 @@ export class PlayerController {
   }
 
   getRotation() {
+    // Return camera rotation
     return this.camera.rotation;
   }
 
