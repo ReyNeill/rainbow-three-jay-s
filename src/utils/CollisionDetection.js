@@ -1,14 +1,27 @@
 import * as THREE from "three";
 
 export class CollisionDetection {
-  constructor(objects) {
-    this.objects = objects; // Assumes these are the collidable objects
+  constructor(
+    objects,
+    playerHeight, // Receive from PlayerController
+    playerRadius, // Receive from PlayerController
+    stepHeight, // Receive from PlayerController
+    groundCheckOffset, // Receive from PlayerController
+    collisionMargin // Receive from PlayerController
+  ) {
+    this.objects = objects;
     this.raycaster = new THREE.Raycaster();
-    this.playerHeight = 1.6; // Changed from 1.8 to 1.6
-    this.playerRadius = 0.4; // Player collision cylinder radius
-    this.stepHeight = 0.5; // Maximum height the player can step over
-    this.groundCheckOffset = 0.1; // Small offset for ground detection ray
-    this.collisionMargin = 0.05; // Small margin to prevent sticking
+    // Use passed-in values
+    this.playerHeight = playerHeight;
+    this.playerRadius = playerRadius;
+    this.stepHeight = stepHeight;
+    this.groundCheckOffset = groundCheckOffset;
+    this.collisionMargin = collisionMargin;
+  }
+
+  setObjects(objects) {
+    // Add method to update objects if needed
+    this.objects = objects;
   }
 
   // Helper to check intersections and filter by distance

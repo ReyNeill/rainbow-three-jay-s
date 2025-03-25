@@ -3,6 +3,7 @@ import { PointerLockControls } from "three/examples/jsm/controls/PointerLockCont
 import { CollisionDetection } from "../utils/CollisionDetection.js";
 import { VaultingSystem } from "./VaultingSystem.js";
 import { GunModel } from "../models/GunModel.js";
+import { Config } from "../Config.js"; // Import Config
 
 export class PlayerController {
   constructor(
@@ -21,10 +22,10 @@ export class PlayerController {
 
     // --- Weapon Bobbing State ---
     this.bobTimer = 0;
-    this.bobIntensity = 0.015;
-    this.bobSpeedFactorWalk = 1.0; // Bob speed factor when walking
-    this.bobSpeedFactorNormal = 1.5; // Bob speed factor when normal speed
-    this.bobSpeedFactorSprint = 2.0; // Bob speed factor when sprinting
+    this.bobIntensity = Config.weaponBob.intensity; // Use Config
+    this.bobSpeedFactorWalk = Config.weaponBob.speedFactorWalk; // Use Config
+    this.bobSpeedFactorNormal = Config.weaponBob.speedFactorNormal; // Use Config
+    this.bobSpeedFactorSprint = Config.weaponBob.speedFactorSprint; // Use Config
     this.isMovingHorizontally = false;
     this.fpGunDefaultPos = new THREE.Vector3(0.2, -0.2, -0.5);
     // --- End Weapon Bobbing State ---
@@ -35,27 +36,27 @@ export class PlayerController {
     this.scene.add(this.cameraGroup); // Add the group to the scene
 
     // Lean state
-    this.leanState = "center"; // 'left', 'center', 'right'
-    this.leanAmount = 0; // Current lean amount (-1 for left, 0 for center, 1 for right)
-    this.maxLeanAngle = Math.PI / 12; // ~15 degrees
-    this.maxLeanOffset = 0.75; // How far to move the camera sideways when leaning
-    this.leanSpeed = 5.0; // Speed of lean transition
+    this.leanAmount = 0; // -1 (left), 0 (center), 1 (right)
+    this.targetLeanAmount = 0;
+    this.leanMode = "toggle"; // "toggle" or "hold"
 
     // Movement speed and physics
     this.velocity = new THREE.Vector3();
     this.direction = new THREE.Vector3();
-    // Define the different speeds
-    this.walkSpeed = 3.0;
-    this.normalSpeed = 5.0; // Default speed
-    this.sprintSpeed = 8.0;
-    this.currentMoveSpeed = this.normalSpeed; // Start at normal speed
+    // Define the different speeds from Config
+    this.walkSpeed = Config.movement.walkSpeed;
+    this.normalSpeed = Config.movement.normalSpeed;
+    this.sprintSpeed = Config.movement.sprintSpeed;
+    this.currentMoveSpeed = this.normalSpeed;
 
     // Gravity and ground state
-    this.gravity = 30.0;
-    this.isOnGround = true;
-
-    this.playerHeight = 1.6;
-    this.headHeightOffset = this.playerHeight * 0.4; // Approx eye level relative to center
+    this.isOnGround = false;
+    this.gravity = Config.player.gravity; // Use Config
+    this.jumpHeight = Config.player.jumpHeight; // Use Config
+    this.playerHeight = Config.player.height; // Use Config
+    // Calculate head offset based on height and ratio
+    this.headHeightOffset =
+      this.playerHeight * Config.player.headHeightOffsetRatio; // Use Config
 
     // Track the true player position (unaffected by lean) - Center of collision volume
     this.truePosition = new THREE.Vector3(0, this.playerHeight / 2, 15);
@@ -64,10 +65,26 @@ export class PlayerController {
     this.controls = new PointerLockControls(this.cameraGroup, this.domElement);
 
     // Collision detection
-    this.collisionDetection = new CollisionDetection(collidableObjects);
+    this.collisionDetection = new CollisionDetection(
+      collidableObjects,
+      this.playerHeight, // Pass height
+      Config.player.radius, // Pass radius from Config
+      Config.collision.stepHeight, // Pass stepHeight from Config
+      Config.collision.groundCheckOffset, // Pass groundCheckOffset from Config
+      Config.collision.margin // Pass margin from Config
+    );
 
     // Vaulting System
-    this.vaultingSystem = new VaultingSystem(collidableObjects, this.uiManager);
+    this.vaultingSystem = new VaultingSystem(
+      collidableObjects,
+      uiManager,
+      this.playerHeight, // Pass height
+      Config.player.radius, // Pass radius from Config
+      Config.vaulting.distance, // Pass distance from Config
+      Config.vaulting.maxHeightDiff, // Pass maxHeightDiff from Config
+      Config.vaulting.minHeightDiff, // Pass minHeightDiff from Config
+      Config.vaulting.duration // Pass duration from Config
+    );
 
     // --- Add First-Person Gun Model ---
     this.fpGun = new GunModel();
@@ -80,13 +97,12 @@ export class PlayerController {
     // --- End First-Person Gun Model ---
 
     // --- Add Lean Mode Setting ---
-    this.leanMode = "toggle"; // 'toggle' or 'hold'
     // --- End Lean Mode Setting ---
 
     // Setup event listeners
     this.setupEventListeners();
 
-    // Set initial camera group position
+    // Set initial camera group position based on truePosition and headHeightOffset
     this.cameraGroup.position
       .copy(this.truePosition)
       .add(new THREE.Vector3(0, this.headHeightOffset, 0));
@@ -102,7 +118,7 @@ export class PlayerController {
     document.addEventListener("pointerlockchange", () => {
       if (!this.inputManager.getIsPointerLocked()) {
         // Reset lean state if pointer lock is lost
-        this.leanState = "center";
+        this.leanAmount = 0;
         // Reset camera roll and offset when lock is lost
         this.camera.rotation.z = 0;
         this.camera.position.set(0, 0, 0); // Reset local position within group
@@ -111,38 +127,42 @@ export class PlayerController {
   }
 
   setCollidableObjects(objects) {
-    this.collisionDetection = new CollisionDetection(objects);
+    this.collisionDetection.setObjects(objects);
     this.vaultingSystem.setCollidableObjects(objects);
   }
 
   updateLean(deltaTime) {
-    // 1. Determine target lean and interpolate leanAmount (Correct)
-    let targetLean = 0;
-    if (this.leanState === "left") targetLean = 1; // Q -> target = 1
-    if (this.leanState === "right") targetLean = -1; // E -> target = -1
-    this.leanAmount +=
-      (targetLean - this.leanAmount) * this.leanSpeed * deltaTime;
-    this.leanAmount = THREE.MathUtils.clamp(this.leanAmount, -1, 1);
-    // Q -> leanAmount approaches 1
-    // E -> leanAmount approaches -1
+    // Smoothly interpolate lean amount
+    this.leanAmount = THREE.MathUtils.lerp(
+      this.leanAmount,
+      this.targetLeanAmount,
+      deltaTime * 15 // Adjust speed as needed
+    );
 
-    // 2. Calculate the desired LOCAL sideways offset along the X-axis
-    // The camera's local X-axis corresponds to its right direction within the cameraGroup.
-    // If leanAmount = 1 (Q, Left Lean): We want to move camera Left (Negative Local X) -> OffsetX = -maxOffset
-    // If leanAmount = -1 (E, Right Lean): We want to move camera Right (Positive Local X) -> OffsetX = maxOffset
-    // Therefore, the local offset along X is (-leanAmount * maxLeanOffset)
-    const localOffsetX = -this.leanAmount * this.maxLeanOffset;
+    // Apply lean offset and roll to the camera within the cameraGroup
+    const leanOffset = this.leanAmount * Config.leaning.amountMultiplier; // Use Config
+    const leanRoll = -this.leanAmount * Config.leaning.rollMultiplier; // Use Config
 
-    // 3. Apply LOCAL offset ONLY along the X-axis of the camera
-    // The camera's local Y and Z position should remain 0 relative to the cameraGroup
-    this.camera.position.x = localOffsetX;
-    this.camera.position.y = 0; // Ensure Y offset is zero
-    this.camera.position.z = 0; // Ensure Z offset is zero
+    this.camera.position.x = leanOffset;
+    this.camera.rotation.z = leanRoll;
 
-    // 4. Apply roll rotation to the camera's LOCAL rotation (Correct)
-    // If leanAmount = 1 (Q, Left Lean): Roll = 1 * maxAngle -> Rolls RIGHT (Positive Z)
-    // If leanAmount = -1 (E, Right Lean): Roll = -1 * maxAngle -> Rolls LEFT (Negative Z)
-    this.camera.rotation.z = this.leanAmount * this.maxLeanAngle;
+    // Apply lean offset to the first-person gun (relative to camera)
+    if (this.fpGunMesh) {
+      // Calculate target X based on default + lean offset
+      // We do this here AND in bobbing, bobbing takes precedence if active
+      const targetGunX =
+        this.fpGunDefaultPos.x -
+        leanOffset * Config.leaning.gunOffsetMultiplier; // Use Config
+      // Only lerp if not actively bobbing horizontally
+      if (!this.isMovingHorizontally || !this.isOnGround) {
+        this.fpGunMesh.position.x = THREE.MathUtils.lerp(
+          this.fpGunMesh.position.x,
+          targetGunX,
+          deltaTime * 10 // Match bobbing lerp speed
+        );
+      }
+      // Bobbing logic will handle lerping if moving
+    }
   }
 
   update(deltaTime) {
@@ -181,7 +201,7 @@ export class PlayerController {
           `Lean Mode: ${this.leanMode.toUpperCase()}`
         );
         // Reset lean state when switching modes to avoid getting stuck
-        this.leanState = "center";
+        this.leanAmount = 0;
       }
       // --- End Toggle Lean Mode Setting ---
 
@@ -190,21 +210,27 @@ export class PlayerController {
         const leanLPressed = this.inputManager.isActionPressed("leanLeft");
         const leanRPressed = this.inputManager.isActionPressed("leanRight");
         if (leanLPressed) {
-          this.leanState = this.leanState === "left" ? "center" : "left";
+          // If currently leaning left, target center. Otherwise, target left.
+          this.targetLeanAmount = this.targetLeanAmount === -1 ? 0 : -1;
+          // If targeting right, switch to left instead of center
+          if (this.targetLeanAmount === 1) this.targetLeanAmount = -1;
         }
         if (leanRPressed) {
-          this.leanState = this.leanState === "right" ? "center" : "right";
+          // If currently leaning right, target center. Otherwise, target right.
+          this.targetLeanAmount = this.targetLeanAmount === 1 ? 0 : 1;
+          // If targeting left, switch to right instead of center
+          if (this.targetLeanAmount === -1) this.targetLeanAmount = 1;
         }
       } else {
         // Hold mode
         const leanLActive = this.inputManager.isActionActive("leanLeft");
         const leanRActive = this.inputManager.isActionActive("leanRight");
         if (leanLActive) {
-          this.leanState = "left";
+          this.targetLeanAmount = -1; // Set target to left
         } else if (leanRActive) {
-          this.leanState = "right";
+          this.targetLeanAmount = 1; // Set target to right
         } else {
-          this.leanState = "center";
+          this.targetLeanAmount = 0; // Set target to center
         }
       }
       // --- End Handle Lean Input ---
@@ -221,12 +247,9 @@ export class PlayerController {
         this.velocity.set(0, 0, 0);
         this.isOnGround = false; // Assume not grounded during vault motion
 
-        // Update lean smoothly back to center during vault
-        this.leanAmount = THREE.MathUtils.lerp(
-          this.leanAmount,
-          0,
-          deltaTime * this.leanSpeed * 2 // Faster return to center
-        );
+        // Set target lean to center during vault
+        this.targetLeanAmount = 0;
+        // this.leanAmount = THREE.MathUtils.lerp( ... ) // This lerp is handled by updateLean now
         this.updateLean(deltaTime); // Apply visual lean offset/roll to camera
 
         // Update cameraGroup position based on the NEW truePosition from vaulting
@@ -270,6 +293,7 @@ export class PlayerController {
           this.isOnGround = false; // Immediately leave ground state
           this.bobTimer = 0; // Reset bobbing on vault start
           this.currentMoveSpeed = this.normalSpeed; // Reset speed on vault start
+          this.targetLeanAmount = 0; // Reset target lean on vault start
           return; // Skip the rest of this frame's physics
         }
       }
@@ -344,7 +368,7 @@ export class PlayerController {
       this.cameraGroup.position.copy(eyePosition);
 
       // --- Update Camera Lean (Local Offset/Roll) ---
-      // This runs regardless of vaulting, using the current leanAmount
+      // This runs regardless of vaulting, using the current leanAmount interpolated towards targetLeanAmount
       this.updateLean(deltaTime);
 
       // --- Update Weapon Bobbing ---
@@ -358,7 +382,6 @@ export class PlayerController {
         this.camera.rotation.z !== 0 ||
         this.camera.position.lengthSq() > 0
       ) {
-        this.leanState = "center"; // Ensure state resets too
         this.leanAmount = 0;
         this.camera.rotation.z = 0;
         this.camera.position.set(0, 0, 0);
@@ -368,6 +391,7 @@ export class PlayerController {
       this.isMovingHorizontally = false;
       this.fpGunMesh.position.copy(this.fpGunDefaultPos); // Instantly reset gun position
       this.currentMoveSpeed = this.normalSpeed; // Reset speed when lock lost
+      this.targetLeanAmount = 0; // Reset target lean when lock is lost
     }
   }
 
@@ -415,8 +439,8 @@ export class PlayerController {
       targetPos.x += horizontalBob;
 
       // Apply lean effect to the target position before lerping
-      const leanOffset = this.leanAmount * 0.5;
-      targetPos.x -= leanOffset * 0.5;
+      const leanOffset = this.leanAmount * Config.leaning.amountMultiplier; // Use Config
+      targetPos.x -= leanOffset * Config.leaning.gunOffsetMultiplier; // Use Config
 
       // Smoothly interpolate towards the target bob position
       this.fpGunMesh.position.lerp(targetPos, deltaTime * 10);
@@ -426,8 +450,8 @@ export class PlayerController {
 
       // Smoothly return to default position (considering lean)
       const targetPos = this.fpGunDefaultPos.clone();
-      const leanOffset = this.leanAmount * 0.5;
-      targetPos.x -= leanOffset * 0.5; // Apply lean offset to default
+      const leanOffset = this.leanAmount * Config.leaning.amountMultiplier; // Use Config
+      targetPos.x -= leanOffset * Config.leaning.gunOffsetMultiplier; // Use Config
 
       this.fpGunMesh.position.lerp(targetPos, deltaTime * 10);
     }

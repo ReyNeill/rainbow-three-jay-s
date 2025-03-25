@@ -1,7 +1,16 @@
 import * as THREE from "three";
 
 export class VaultingSystem {
-  constructor(collidableObjects = [], uiManager) {
+  constructor(
+    collidableObjects = [],
+    uiManager,
+    playerHeight, // Receive from PlayerController
+    playerRadius, // Receive from PlayerController
+    vaultDistance, // Receive from PlayerController
+    vaultMaxHeightDiff, // Receive from PlayerController
+    vaultMinHeightDiff, // Receive from PlayerController
+    vaultDuration // Receive from PlayerController
+  ) {
     this.collidableObjects = collidableObjects;
     this.uiManager = uiManager;
 
@@ -10,16 +19,16 @@ export class VaultingSystem {
     this.isVaulting = false;
     this.vaultTargetPosition = null; // Where the player lands after vaulting
     this.vaultObjectTopY = 0; // The Y coordinate of the top of the object being vaulted
-    this.vaultDuration = 0.4; // seconds
     this.vaultTimer = 0;
     this.vaultStartPosition = new THREE.Vector3(); // Where the player starts the vault
 
-    // Configuration
-    this.vaultDistance = 1.5; // How far ahead to check for vaultable objects
-    this.vaultMaxHeightDiff = 1.3; // Max height diff: object top vs player feet (was 1.7, adjusted lower)
-    this.vaultMinHeightDiff = 0.2; // Min height diff: object top vs player feet (was 0.3, adjusted lower)
-    this.playerHeight = 1.6; // Keep consistent with PlayerController/CollisionDetection
-    this.playerRadius = 0.4; // Keep consistent
+    // Configuration - Use passed-in values
+    this.vaultDistance = vaultDistance;
+    this.vaultMaxHeightDiff = vaultMaxHeightDiff;
+    this.vaultMinHeightDiff = vaultMinHeightDiff;
+    this.playerHeight = playerHeight;
+    this.playerRadius = playerRadius;
+    this.vaultDuration = vaultDuration;
 
     // Internal state for UI updates
     this._isPromptVisible = false;

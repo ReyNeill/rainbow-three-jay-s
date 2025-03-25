@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { PlayerModel } from "./PlayerModel.js";
+import { Config } from "../Config.js"; // Import Config
 
 export class DummyModel extends PlayerModel {
   constructor(scene, position = { x: 0, y: 0.8, z: 0 }, options = {}) {
@@ -14,11 +15,12 @@ export class DummyModel extends PlayerModel {
     // Call parent constructor with dummy-specific options
     super(scene, position, combinedOptions);
 
-    // Setup gravity
+    // Setup gravity using Config
     this.velocity = new THREE.Vector3();
-    this.gravity = 30.0; // Match PlayerController gravity
-    this.playerHeight = 1.6; // Changed from 1.8 to 1.6
-    this.floorLevelY = position.y - this.playerHeight / 2; // Calculate initial floor level based on spawn
+    this.gravity = Config.player.gravity; // Use Config
+    this.playerHeight = Config.player.height; // Use Config
+    // Calculate initial floor level based on spawn and player height from Config
+    this.floorLevelY = position.y - this.playerHeight / 2;
     this.isOnGround = false;
 
     // Add small text indicator above the health bar
