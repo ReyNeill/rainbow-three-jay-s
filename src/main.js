@@ -245,7 +245,10 @@ if (uiManager.elements.testingInstructions) {
           <p>- Look for the <span style="color: yellow;">YELLOW</span> dummy players</p>
           <p>- Try to hit the <span style="color: red;">RED</span> moving targets - they respawn after 5 seconds</p>
           <p>- Click to lock pointer and enable shooting</p>
-          <p>- WASD to move, Space to vault over obstacles</p>
+          <p>- WASD to move</p>
+          <p>- Hold <span style="color: #lightgreen;">SHIFT</span> to Sprint</p>
+          <p>- Hold <span style="color: #lightblue;">ALT</span> to Walk</p>
+          <p>- Space to vault over obstacles</p>
           <p>- Q/E to lean (Mode: <span id="lean-mode-display">TOGGLE</span>)</p>
           <p>- L to toggle Lean Mode (Hold/Toggle)</p>
           <p>- Left-click to shoot targets and dummies</p>

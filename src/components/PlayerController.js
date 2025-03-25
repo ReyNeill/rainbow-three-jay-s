@@ -19,6 +19,16 @@ export class PlayerController {
     this.uiManager = uiManager;
     this.scene = scene;
 
+    // --- Weapon Bobbing State ---
+    this.bobTimer = 0;
+    this.bobIntensity = 0.015;
+    this.bobSpeedFactorWalk = 1.0; // Bob speed factor when walking
+    this.bobSpeedFactorNormal = 1.5; // Bob speed factor when normal speed
+    this.bobSpeedFactorSprint = 2.0; // Bob speed factor when sprinting
+    this.isMovingHorizontally = false;
+    this.fpGunDefaultPos = new THREE.Vector3(0.2, -0.2, -0.5);
+    // --- End Weapon Bobbing State ---
+
     // Create a group to manage camera pitch/yaw (controlled by PointerLock)
     this.cameraGroup = new THREE.Group();
     this.cameraGroup.add(this.camera); // Add the actual camera to the group
@@ -34,17 +44,21 @@ export class PlayerController {
     // Movement speed and physics
     this.velocity = new THREE.Vector3();
     this.direction = new THREE.Vector3();
-    this.moveSpeed = 10.0;
+    // Define the different speeds
+    this.walkSpeed = 3.0;
+    this.normalSpeed = 5.0; // Default speed
+    this.sprintSpeed = 8.0;
+    this.currentMoveSpeed = this.normalSpeed; // Start at normal speed
 
     // Gravity and ground state
     this.gravity = 30.0;
     this.isOnGround = true;
 
     this.playerHeight = 1.6;
-    this.headHeightOffset = 0.8;
+    this.headHeightOffset = this.playerHeight * 0.4; // Approx eye level relative to center
 
     // Track the true player position (unaffected by lean) - Center of collision volume
-    this.truePosition = new THREE.Vector3(0, 0.8, 15);
+    this.truePosition = new THREE.Vector3(0, this.playerHeight / 2, 15);
 
     // Initialize pointer lock controls
     this.controls = new PointerLockControls(this.cameraGroup, this.domElement);
@@ -58,8 +72,8 @@ export class PlayerController {
     // --- Add First-Person Gun Model ---
     this.fpGun = new GunModel();
     this.fpGunMesh = this.fpGun.getMesh();
-    // Position the gun in the camera's view (bottom right)
-    this.fpGunMesh.position.set(0.2, -0.2, -0.5); // Adjust x, y, z as needed
+    // Use the stored default position
+    this.fpGunMesh.position.copy(this.fpGunDefaultPos);
     this.fpGunMesh.rotation.y = -Math.PI / 20; // Slight angle
     this.fpGunMesh.scale.set(0.8, 0.8, 0.8); // Adjust scale for first-person view
     this.camera.add(this.fpGunMesh); // Add gun as child of camera
@@ -144,7 +158,20 @@ export class PlayerController {
       const moveR = this.inputManager.isActionActive("moveRight");
       const vaultPressed = this.inputManager.isActionPressed("vault");
       const toggleLeanModePressed =
-        this.inputManager.isActionPressed("toggleLeanMode"); // New input
+        this.inputManager.isActionPressed("toggleLeanMode");
+      const isSprinting = this.inputManager.isActionActive("sprint"); // Check sprint
+      const isWalking = this.inputManager.isActionActive("walk"); // Check walk
+      const isTryingToMove = moveF || moveB || moveL || moveR; // Check if any movement key is pressed
+
+      // --- Determine Current Move Speed ---
+      if (isTryingToMove && isSprinting) {
+        this.currentMoveSpeed = this.sprintSpeed;
+      } else if (isTryingToMove && isWalking) {
+        this.currentMoveSpeed = this.walkSpeed;
+      } else {
+        this.currentMoveSpeed = this.normalSpeed; // Default to normal speed
+      }
+      // --- End Determine Current Move Speed ---
 
       // --- Toggle Lean Mode Setting ---
       if (toggleLeanModePressed) {
@@ -210,6 +237,10 @@ export class PlayerController {
 
         // If the vault is still ongoing after the update, skip the rest of physics
         if (this.vaultingSystem.isVaulting) {
+          // Reset bobbing when vaulting
+          this.bobTimer = 0;
+          this.fpGunMesh.position.lerp(this.fpGunDefaultPos, deltaTime * 10); // Smoothly return gun
+          this.currentMoveSpeed = this.normalSpeed; // Reset speed during vault? Or let it update next frame.
           return;
         }
         // If vault just finished, allow rest of update to run for grounding
@@ -237,6 +268,8 @@ export class PlayerController {
         if (vaultStarted) {
           this.velocity.set(0, 0, 0); // Stop current momentum
           this.isOnGround = false; // Immediately leave ground state
+          this.bobTimer = 0; // Reset bobbing on vault start
+          this.currentMoveSpeed = this.normalSpeed; // Reset speed on vault start
           return; // Skip the rest of this frame's physics
         }
       }
@@ -250,6 +283,9 @@ export class PlayerController {
       this.direction.x = Number(moveR) - Number(moveL);
       this.direction.normalize();
 
+      // Determine if moving horizontally based on input direction, not velocity
+      this.isMovingHorizontally = this.direction.lengthSq() > 0.01;
+
       const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(
         this.cameraGroup.quaternion
       );
@@ -261,13 +297,15 @@ export class PlayerController {
       if (forward.lengthSq() > 0) forward.normalize();
       if (right.lengthSq() > 0) right.normalize();
 
+      // Use currentMoveSpeed here
       const targetVelocityX =
         (right.x * this.direction.x + forward.x * this.direction.z) *
-        this.moveSpeed;
+        this.currentMoveSpeed;
       const targetVelocityZ =
         (right.z * this.direction.x + forward.z * this.direction.z) *
-        this.moveSpeed;
+        this.currentMoveSpeed;
 
+      // Apply target velocity directly for more responsive control
       this.velocity.x = targetVelocityX;
       this.velocity.z = targetVelocityZ;
 
@@ -308,6 +346,10 @@ export class PlayerController {
       // --- Update Camera Lean (Local Offset/Roll) ---
       // This runs regardless of vaulting, using the current leanAmount
       this.updateLean(deltaTime);
+
+      // --- Update Weapon Bobbing ---
+      this.updateWeaponBob(deltaTime);
+      // --- End Weapon Bobbing ---
     } else {
       // Not pointer locked
       this.velocity.set(0, 0, 0);
@@ -321,6 +363,11 @@ export class PlayerController {
         this.camera.rotation.z = 0;
         this.camera.position.set(0, 0, 0);
       }
+      // Reset bobbing when pointer lock is lost
+      this.bobTimer = 0;
+      this.isMovingHorizontally = false;
+      this.fpGunMesh.position.copy(this.fpGunDefaultPos); // Instantly reset gun position
+      this.currentMoveSpeed = this.normalSpeed; // Reset speed when lock lost
     }
   }
 
@@ -341,4 +388,49 @@ export class PlayerController {
   getFPGun() {
     return this.fpGun;
   }
+
+  // --- Update Weapon Bobbing Method ---
+  updateWeaponBob(deltaTime) {
+    let currentBobSpeedFactor = this.bobSpeedFactorNormal; // Default
+    if (this.currentMoveSpeed === this.sprintSpeed) {
+      currentBobSpeedFactor = this.bobSpeedFactorSprint;
+    } else if (this.currentMoveSpeed === this.walkSpeed) {
+      currentBobSpeedFactor = this.bobSpeedFactorWalk;
+    }
+
+    if (this.isMovingHorizontally && this.isOnGround) {
+      // Player is moving on the ground, update bob timer
+      // Use currentMoveSpeed and the selected bob factor
+      this.bobTimer +=
+        deltaTime * this.currentMoveSpeed * currentBobSpeedFactor;
+
+      // Calculate bobbing offsets using sine waves
+      const verticalBob = Math.sin(this.bobTimer) * this.bobIntensity;
+      const horizontalBob =
+        Math.cos(this.bobTimer * 0.5) * this.bobIntensity * 0.5;
+
+      // Apply bobbing relative to the default position + lean offset
+      const targetPos = this.fpGunDefaultPos.clone();
+      targetPos.y += verticalBob;
+      targetPos.x += horizontalBob;
+
+      // Apply lean effect to the target position before lerping
+      const leanOffset = this.leanAmount * 0.5;
+      targetPos.x -= leanOffset * 0.5;
+
+      // Smoothly interpolate towards the target bob position
+      this.fpGunMesh.position.lerp(targetPos, deltaTime * 10);
+    } else {
+      // Player is not moving horizontally or is airborne
+      this.bobTimer = 0; // Reset timer if stopped or in air
+
+      // Smoothly return to default position (considering lean)
+      const targetPos = this.fpGunDefaultPos.clone();
+      const leanOffset = this.leanAmount * 0.5;
+      targetPos.x -= leanOffset * 0.5; // Apply lean offset to default
+
+      this.fpGunMesh.position.lerp(targetPos, deltaTime * 10);
+    }
+  }
+  // --- End Weapon Bobbing Method ---
 }

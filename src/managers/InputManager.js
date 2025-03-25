@@ -15,6 +15,10 @@ export class InputManager {
       KeyE: "leanRight",
       Space: "vault",
       KeyL: "toggleLeanMode",
+      ShiftLeft: "sprint",
+      ShiftRight: "sprint",
+      AltLeft: "walk",
+      AltRight: "walk",
     };
 
     this.mouseButtonToAction = {
