@@ -1,0 +1,26 @@
+{
+  "name": "rainbow-three-jay-s",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite",
+    "build": "vite build",
+    "start": "node server.js",
+    "dev:server": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "three": "^0.174.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9",
+    "vite": "^6.2.3"
+  }
+}
