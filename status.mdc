@@ -3,79 +3,78 @@ description:
 globs: 
 alwaysApply: false
 ---
- # Rainbow Three Jay's - Project Status
+# Rainbow Three Jay's - Project Status
 
 ## Current Development Status
 
-The game is currently in the early stages of development, focusing on refining core mechanics like movement, leaning, vaulting, and shooting (Phase 3/4). Significant refactoring has been done to improve code structure and maintainability.
+The game is currently in the early stages of development, focusing on core first-person shooter mechanics. We have implemented several key features and are working towards a robust single-player foundation before tackling multiplayer aspects.
 
 ### Implemented Features
 
 #### Core Systems
-- **Rendering**: Basic Three.js scene setup.
-- **Player Controller**: First-person movement (WASD), physics integration (gravity).
-- **Collision Detection**: Centralized system preventing movement through obstacles.
-- **Leaning System**: Q/E keys toggle left/right lean with positional offset and camera roll.
-- **Vaulting System**: Centralized system handling vault detection (based on object type/height), visual prompts, and vault animation.
-- **Shooting Mechanics**: Basic raycast shooting from camera center.
-- **Input Manager**: Centralized handling of keyboard and mouse input actions.
-- **UI Manager**: Centralized management of HUD elements (crosshair, prompts, instructions).
-- **Networking**: Basic player synchronization (position, rotation, lean) via Socket.IO. Hit registration and health updates handled server-side (excluding dummies/targets).
+- **Rendering**: Basic Three.js scene setup with proper camera positioning.
+- **Player Controller**: First-person movement (walk, normal, sprint), mouse look, jumping.
+- **Collision Detection**: Multi-height raycasting system preventing movement through obstacles and handling step height.
+- **Leaning System**: Q/E keys (toggle/hold modes) for left/right lean with smooth camera offset and roll.
+- **Vaulting System**: Space key triggers vaults over appropriate obstacles (MiniTable, Table, HalfWall) with visual prompts and smooth animation.
+- **Shooting Mechanics**: Basic hitscan shooting (left-click) with raycasting, muzzle flash, hit effects, and sound.
+- **Aiming System (ADS)**: Right-click hold zooms camera (FOV change), moves weapon to centered sight position, reduces movement speed and weapon bob, and hides crosshair.
+- **Input Manager**: Centralized handling of keyboard and mouse inputs mapped to game actions.
+- **UI Manager**: Manages on-screen elements like crosshair, vault prompts, instructions, hit markers, and notifications.
+- **Configuration (`Config.js`)**: Centralized parameters for player physics, movement, collision, vaulting, leaning, aiming, and weapon bobbing.
 
 #### Game Environment
 - **Game Map**: Simple test environment with:
-  - Target shooting range (moving targets).
-  - Vaultable obstacles (Mini Tables, Tables, Half Walls).
+  - Target shooting range with moving targets.
+  - Obstacle course area with standardized vaultable objects.
   - Dummy player models for practice.
-- **Vaultable Objects**: Standardized obstacles with defined heights and `vaultable` type in `userData`.
-  - Mini Tables (0.5 height) - Blue
+- **Vaultable Objects**: Standardized obstacles with defined heights and visual distinction:
+  - Mini Tables (0.6 height) - Blue
   - Tables (0.8 height) - Green
-  - Half Walls (1.2 height) - Red
-- **Visual Elements**: Crosshair, vault prompt, hit markers, hit overlay, instructions.
+  - Half Walls (1.2 height) - Red (Note: Height updated from 0.5 for MiniTable)
+- **Visual Elements**: On-screen instructions, crosshair (hidden during ADS), vault prompts, hit markers, lean mode notifications.
 
 #### Object Models
-- **PlayerModel**: Consistent base model (capsule body, sphere head) used for local player, other players, and dummies. Includes team coloring and health bar.
-- **DummyModel**: Target dummy extending `PlayerModel` with specific coloring and behavior.
-- **TargetModel**: Moving targets with hit effects and respawn functionality.
-- **MiniTableModel**: Low vaultable obstacles (height 0.5).
+- **PlayerModel**: Base model for player-like entities (used for other players).
+- **DummyModel**: Target dummy extending PlayerModel with specific color and behavior.
+- **TargetModel**: Moving sphere targets with hit effects and respawn functionality.
+- **VaultableObjectModel**: Base class for vaultable static objects.
+- **MiniTableModel**: Low vaultable obstacles (height 0.6).
 - **TableModel**: Medium vaultable obstacles (height 0.8).
 - **HalfWallModel**: Tall vaultable obstacles (height 1.2).
+- **GunModel**: First-person assault rifle model (R4C style) with ACOG sight geometry.
 
 ### Recent Improvements
-- **Code Centralization**:
-    - Vaulting logic moved to `VaultingSystem.js`.
-    - Input handling moved to `InputManager.js`.
-    - UI element management moved to `UIManager.js`.
-- **Consistency**: `OtherPlayers` now uses `PlayerModel` for visual consistency with the local player and dummies.
-- **Camera Alignment**: Player camera height adjusted to match the visual head position within the `PlayerModel`.
-- **Player Sizing**: Player collision height and visual model adjusted (currently 1.6 units).
-- **Bug Fixes**:
-    - Corrected camera rotation issues during leaning.
-    - Improved vault initiation responsiveness (removed throttle delay).
-- **Refactoring**: Removed direct DOM manipulation from components like `PlayerController`, `VaultingSystem`, `WeaponSystem`.
+- Implemented three distinct movement speeds: Walk (Alt), Normal, Sprint (Shift).
+- Added weapon bobbing animation during movement, varying with speed.
+- Centralized configuration values into `Config.js`.
+- Refactored `TableModel` and `MiniTableModel` to use a base `VaultableObjectModel`.
+- Fixed bugs related to leaning state persistence and collision detection with low objects.
+- Increased `MiniTable` height to 0.6 to make it consistently vaultable.
+- Implemented Aim Down Sights (ADS) mechanic with FOV change, weapon centering, speed/bob reduction, and crosshair toggle.
+- Refined first-person gun model positioning for hip-fire and ADS states.
 
 ### Current Focus Areas
-- Ensuring stability and correctness of core mechanics (movement, collision, lean, vault, shoot).
-- Refining interactions between different systems (PlayerController, VaultingSystem, CollisionDetection, InputManager, UIManager).
-- Preparing for more robust networking implementation.
+- Refining core mechanics (movement, shooting, aiming, leaning, vaulting).
+- Ensuring smooth transitions and interactions between different player states (e.g., aiming while leaning).
+- Preparing for basic networking implementation.
 
 ### Next Steps
-- Complete basic shooting mechanics refinement (Phase 4).
-- Implement server-side validation and more robust state synchronization (Phase 5).
-- Design more complex map layouts (Phase 6).
-- Implement basic team mechanics (Phase 7).
+- Refine ADS weapon positioning and sight alignment (Phase 4 Polish).
+- Implement basic ammo count and reload mechanism (Phase 5).
+- Begin basic networking for player synchronization (Phase 5).
+- Introduce client-side state management (`GameStateManager`) and refactor networking into `NetworkManager` (Phase 6).
 
 ## Technical Highlights
 
 ### Collision Detection System
-Uses raycasting to check for collisions at different heights, preventing movement through obstacles based on player dimensions and step height. Integrated with the `PlayerController`.
+Uses multi-height raycasting from `CollisionDetection.js` (configured via `Config.js`) to check for obstacles at various points along the player's height, allowing for stepping over low objects and preventing passage through taller ones.
 
 ### Vaulting System
-Detects vaultable objects (`userData.type === "vaultable"`) within a specific height range using raycasting. Manages the vault animation (Bezier curve) and state transitions. Communicates with `UIManager` for visual prompts.
+Managed by `VaultingSystem.js`, detects vaultable objects (marked with `userData.type = 'vaultable'`) within range and height constraints (`Config.vaulting`). Provides UI prompts via `UIManager` and executes a smooth parabolic vault animation controlled by `PlayerController`.
 
-### Input & UI Managers
-- **InputManager**: Abstracts raw browser input events into game-specific actions (e.g., `moveForward`, `shoot`, `vault`), queried by other systems.
-- **UIManager**: Manages the creation, visibility, and state of all DOM-based UI elements, providing a single interface for components to update the HUD.
+### Aiming System (ADS)
+Implemented in `PlayerController.js`, triggered by `InputManager`. Smoothly interpolates camera FOV (`Config.aiming.adsFOV`) and first-person gun position (`Config.aiming.adsGunPosition`) using `THREE.MathUtils.lerp`. Modifies `currentMoveSpeed` and weapon bob intensity (`Config.aiming` multipliers) during ADS. Toggles crosshair visibility via `UIManager`.
 
-### Component-Based Structure
-Utilizes separate classes for core functionalities (PlayerController, WeaponSystem, VaultingSystem, CollisionDetection) and managers (InputManager, UIManager), promoting modularity. `PlayerModel` serves as a reusable visual and data component for player-like entities.
+### Object Model System
+Utilizes distinct classes for game objects (`TableModel`, `PlayerModel`, etc.), promoting modularity. Vaultable objects inherit from `VaultableObjectModel` for shared properties and setup. Models include `userData` for identification (e.g., `playerId`, `isTarget`, `type: 'vaultable'`).
