@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { io } from "socket.io-client";
 import { PlayerController } from "./components/PlayerController.js";
 import { GameMap } from "./components/GameMap.js";
 import { OtherPlayers } from "./components/OtherPlayers.js";
@@ -7,6 +6,7 @@ import { WeaponSystem } from "./components/WeaponSystem.js";
 import { DummyPlayer } from "./components/DummyPlayer.js";
 import { InputManager } from "./managers/InputManager.js";
 import { UIManager } from "./managers/UIManager.js";
+import { NetworkManager } from "./managers/NetworkManager.js";
 
 // Initialize the scene
 const scene = new THREE.Scene();
@@ -51,58 +51,45 @@ const gameMap = new GameMap(scene);
 // Initialize managers
 const inputManager = new InputManager(renderer.domElement);
 const uiManager = new UIManager();
+const networkManager = new NetworkManager();
 
-// Initialize player controller with managers AND scene
+// Initialize player controller
 const playerController = new PlayerController(
   camera,
   renderer.domElement,
   gameMap.getCollidableObjects(),
   inputManager,
   uiManager,
-  scene // Pass scene reference
+  scene
 );
 
 // Initialize other players manager
 const otherPlayers = new OtherPlayers(scene);
 
-// Create dummy player for target practice
-// Position the dummy player directly in front of starting position
+// Create dummy players
 const dummyPlayer = new DummyPlayer(scene, { x: 0, y: 0.8, z: -15 });
-
-// Add another dummy to the side for easier testing
 const dummyPlayer2 = new DummyPlayer(scene, { x: 5, y: 0.8, z: -15 });
 
-// Add dummy players to player controller's collidable objects
-const dummyMeshes1 = dummyPlayer.getMeshes();
-const dummyMeshes2 = dummyPlayer2.getMeshes();
-// Update the player controller's collidable objects to include dummy players
-playerController.setCollidableObjects([
-  ...gameMap.getCollidableObjects(),
-  ...dummyMeshes1,
-  ...dummyMeshes2,
-]);
-
-// Socket.io connection
-const socket = io();
-
-// Initialize weapon system with managers AND fpGun
+// --- Initialize Weapon System EARLIER ---
+// Initialize weapon system - Pass NetworkManager instead of socket
+// Pass the initial collidables from the player controller
 const weaponSystem = new WeaponSystem(
   scene,
   camera,
-  [], // Initial collidables, will be synced
-  socket,
+  playerController.collisionDetection.objects, // Get initial list from playerController
+  networkManager,
   inputManager,
   uiManager,
   dummyPlayer,
-  playerController.getFPGun() // Pass the first-person gun instance
+  playerController.getFPGun()
 );
 
-// Pass the target instances to weapon system
+// Pass the target instances to weapon system (can happen after initialization)
 weaponSystem.targets = gameMap.getTargets();
+// --- End Weapon System Initialization ---
 
-// Sync function to ensure weapon system and player controller have the same collidable objects
+// Sync function to update collidable objects for relevant systems
 function syncCollidableObjects() {
-  // Get all collidable objects from all sources
   const allCollidables = [
     ...gameMap.getCollidableObjects(),
     ...otherPlayers.getPlayerObjects(),
@@ -110,13 +97,25 @@ function syncCollidableObjects() {
     ...(dummyPlayer2 ? dummyPlayer2.getMeshes() : []),
   ];
 
-  // Update both systems
   playerController.setCollidableObjects(allCollidables);
+  // Update WeaponSystem collidables - Now weaponSystem is guaranteed to exist
   weaponSystem.setCollidableObjects(allCollidables);
 }
 
-// Initial sync
+// Initial sync AFTER weapon system is created
 syncCollidableObjects();
+
+// --- Networking Setup ---
+// Set references needed by NetworkManager
+networkManager.setReferences(
+  playerController,
+  otherPlayers,
+  uiManager,
+  syncCollidableObjects
+);
+// Connect to the server
+networkManager.connect();
+// --- End Networking Setup ---
 
 // Handle window resize
 window.addEventListener("resize", () => {
@@ -134,129 +133,6 @@ document.addEventListener("pointerlockchange", () => {
   uiManager.handlePointerLockChange(isLocked);
 });
 
-// Socket.io event handlers
-socket.on("connect", () => {
-  console.log("Connected to server with ID:", socket.id);
-
-  // Send player position to server periodically
-  setInterval(() => {
-    const position = playerController.getPosition();
-    const rotation = playerController.getRotation();
-    const leanAmount = playerController.getLeanAmount();
-
-    socket.emit("playerUpdate", {
-      position: {
-        x: position.x,
-        y: position.y,
-        z: position.z,
-      },
-      rotation: {
-        x: rotation.x,
-        y: rotation.y,
-        z: rotation.z,
-      },
-      leanAmount: leanAmount,
-    });
-  }, 100); // Send update every 100ms
-});
-
-socket.on("message", (message) => {
-  console.log("Message from server:", message);
-});
-
-// Handle current players data
-socket.on("currentPlayers", (players) => {
-  // Filter out own player before setting players
-  const otherPlayersData = {};
-  Object.keys(players).forEach((playerId) => {
-    if (playerId !== socket.id) {
-      otherPlayersData[playerId] = players[playerId];
-    }
-  });
-
-  // Only add other players, not ourselves
-  otherPlayers.setPlayers(otherPlayersData);
-
-  // Update collidable objects
-  syncCollidableObjects();
-});
-
-// Handle new player joining
-socket.on("newPlayer", (playerData) => {
-  // Make sure we never add ourselves
-  if (playerData.id !== socket.id) {
-    otherPlayers.addPlayer(playerData);
-
-    // Update collidable objects
-    syncCollidableObjects();
-  }
-});
-
-// Handle player movement
-socket.on("playerMoved", (playerData) => {
-  otherPlayers.updatePlayer(playerData);
-});
-
-// Handle player disconnection
-socket.on("playerDisconnected", (playerId) => {
-  otherPlayers.removePlayer(playerId);
-
-  // Update collidable objects
-  syncCollidableObjects();
-});
-
-// Handle when player is hit by another player
-socket.on("playerHit", (data) => {
-  // Add visual/audio feedback for being hit
-  console.log(`Hit by player ${data.shooterId} for ${data.damage} damage`);
-
-  // Flash screen red when hit
-  uiManager.showHitOverlay();
-});
-
-// Handle hit confirmation when player successfully hits another player
-socket.on("hitConfirmed", (data) => {
-  // Play hit marker sound or visual
-  console.log(`Hit player ${data.targetId} for ${data.damage} damage`);
-
-  // Show simple hit marker in center of screen
-  uiManager.showHitMarker();
-
-  // Update the target's health in the OtherPlayers component for visual feedback
-  if (otherPlayers.players[data.targetId]) {
-    otherPlayers.players[data.targetId].health =
-      data.remainingHealth ||
-      Math.max(
-        0,
-        (otherPlayers.players[data.targetId].health || 100) - data.damage
-      );
-    otherPlayers.updateHealth(
-      data.targetId,
-      otherPlayers.players[data.targetId].health
-    );
-    otherPlayers.showHitEffect(data.targetId);
-  }
-});
-
-// --- Update Testing Instructions Text ---
-if (uiManager.elements.testingInstructions) {
-  uiManager.elements.testingInstructions.innerHTML = `
-          <h3 style="color: #ff9900; margin: 0 0 10px 0;">Shooting Test Arena</h3>
-          <p>- Look for the <span style="color: yellow;">YELLOW</span> dummy players</p>
-          <p>- Try to hit the <span style="color: red;">RED</span> moving targets - they respawn after 5 seconds</p>
-          <p>- Click to lock pointer and enable shooting</p>
-          <p>- WASD to move</p>
-          <p>- Hold <span style="color: #lightgreen;">SHIFT</span> to Sprint</p>
-          <p>- Hold <span style="color: #lightblue;">ALT</span> to Walk</p>
-          <p>- Space to vault over obstacles</p>
-          <p>- Q/E to lean (Mode: <span id="lean-mode-display">TOGGLE</span>)</p>
-          <p>- L to toggle Lean Mode (Hold/Toggle)</p>
-          <p>- Left-click to shoot targets and dummies</p>
-        `;
-  // Add an ID to update the mode display easily if needed, or use showNotification
-}
-// --- End Update Testing Instructions Text ---
-
 // Game loop variables
 let lastTime = 0;
 let lastLeanMode = playerController.leanMode; // Track lean mode for UI update
@@ -265,14 +141,13 @@ let lastLeanMode = playerController.leanMode; // Track lean mode for UI update
 function animate(time) {
   requestAnimationFrame(animate);
 
-  // Calculate delta time in seconds
-  const deltaTime = (time - lastTime) / 1000 || 0; // Prevent NaN on first frame
+  const deltaTime = (time - lastTime) / 1000 || 0;
   lastTime = time;
 
   // Update player controller
   playerController.update(deltaTime);
 
-  // --- Update Lean Mode Display in Instructions (Optional) ---
+  // Update Lean Mode Display (Optional)
   if (playerController.leanMode !== lastLeanMode) {
     lastLeanMode = playerController.leanMode;
     const leanModeDisplay = document.getElementById("lean-mode-display");
@@ -281,7 +156,6 @@ function animate(time) {
     }
     // UIManager.showNotification is already called in PlayerController
   }
-  // --- End Update Lean Mode Display ---
 
   // Update moving targets
   gameMap.updateTargets(deltaTime);
@@ -292,7 +166,7 @@ function animate(time) {
   // Render the scene
   renderer.render(scene, camera);
 
-  // Update Input Manager (call at the end of the frame)
+  // Update Input Manager
   inputManager.update();
 }
 

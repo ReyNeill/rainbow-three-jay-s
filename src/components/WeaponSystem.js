@@ -6,7 +6,7 @@ export class WeaponSystem {
     scene,
     camera,
     collidableObjects = [],
-    socket,
+    networkManager,
     inputManager,
     uiManager,
     dummyPlayer = null,
@@ -15,7 +15,7 @@ export class WeaponSystem {
     this.scene = scene;
     this.camera = camera;
     this.collidableObjects = collidableObjects;
-    this.socket = socket;
+    this.networkManager = networkManager;
     this.inputManager = inputManager;
     this.uiManager = uiManager;
     this.dummyPlayer = dummyPlayer;
@@ -124,14 +124,14 @@ export class WeaponSystem {
         this.dummyPlayer.hit(25); // Apply damage to dummy
         hitConfirmed = true;
         console.log("Hit dummy player!");
-        return;
+        // No network event needed for dummy
       }
 
       // Handle target hit
-      if (hitObject.userData.isTarget) {
+      else if (hitObject.userData.isTarget) {
         hitConfirmed = true;
         // Get the target position for respawning later
-        const targetPosition = hitObject.position.clone();
+        const targetPosition = hitObject.getWorldPosition(new THREE.Vector3()); // Get world position
 
         // Remove target from collidable objects
         this.collidableObjects = this.collidableObjects.filter(
@@ -157,7 +157,7 @@ export class WeaponSystem {
               // Create new target using the TargetModel
               const newTarget = TargetModel.createWithRespawnEffect(
                 this.scene,
-                targetPosition
+                targetPosition // Use stored world position
               );
 
               // Add to collidable objects
@@ -165,25 +165,30 @@ export class WeaponSystem {
 
               // Store the target instance
               if (!this.targets) this.targets = [];
+              // Remove old instance if it exists in the array, add new one
+              this.targets = this.targets.filter((t) => t !== targetInstance);
               this.targets.push(newTarget);
             }, 5000); // 5 seconds
           });
         }
 
-        return;
+        // No network event needed for static targets
       }
 
-      // If multiplayer is enabled and we hit another player
-      if (this.socket && hitObject.userData && hitObject.userData.playerId) {
-        // Send hit event to server
-        this.socket.emit("playerShot", {
-          targetId: hitObject.userData.playerId,
-          damage: 25, // Basic damage amount
-        });
+      // Handle hitting another player
+      else if (
+        this.networkManager &&
+        hitObject.userData &&
+        hitObject.userData.playerId
+      ) {
+        // Use NetworkManager to send the event
+        this.networkManager.sendPlayerShot(hitObject.userData.playerId, 25);
+        // Note: Hit confirmation (UI marker) is now handled by NetworkManager receiving 'hitConfirmed'
+        // We don't set hitConfirmed = true here for player hits.
         console.log("Shot player:", hitObject.userData.playerId);
       }
 
-      // Show UI hit marker if it wasn't another player
+      // Show UI hit marker ONLY for confirmed non-player hits (dummy, target)
       if (hitConfirmed && this.uiManager) {
         this.uiManager.showHitMarker();
       }
