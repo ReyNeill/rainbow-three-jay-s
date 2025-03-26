@@ -26,9 +26,7 @@ export class GunModel {
       metalness: 0.7,
     });
     const lensMaterial = new THREE.MeshBasicMaterial({
-      color: this.options.lensColor,
-      transparent: true,
-      opacity: 0.3,
+      color: 0x111111, // Dark grey/black
     });
 
     // --- Rifle Components ---

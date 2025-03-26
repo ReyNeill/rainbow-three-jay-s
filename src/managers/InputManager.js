@@ -24,7 +24,7 @@ export class InputManager {
     this.mouseButtonToAction = {
       0: "shoot", // Left mouse button
       // 1: 'aim', // Middle mouse button (example)
-      // 2: 'melee' // Right mouse button (example)
+      2: "aim", // Right mouse button
     };
 
     this.activeActions = new Set(); // Actions currently held down

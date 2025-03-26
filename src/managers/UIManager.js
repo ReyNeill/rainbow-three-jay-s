@@ -193,10 +193,12 @@ export class UIManager {
   // --- Event Handlers ---
 
   handlePointerLockChange(isLocked) {
-    this.setCrosshairVisible(isLocked);
+    // Instructions are handled separately now
+    // this.setCrosshairVisible(isLocked); // PlayerController handles this based on aiming
     this.setInstructionsVisible(!isLocked);
     if (!isLocked) {
       this.setVaultPromptVisible(false); // Hide vault prompt if lock is lost
+      this.setCrosshairVisible(false); // Explicitly hide crosshair when lock lost
     }
   }
 

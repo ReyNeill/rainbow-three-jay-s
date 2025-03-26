@@ -20,15 +20,28 @@ export class PlayerController {
     this.uiManager = uiManager;
     this.scene = scene;
 
+    // --- Camera FOV State ---
+    this.defaultFOV = Config.camera.defaultFOV;
+    this.adsFOV = Config.aiming.adsFOV;
+    this.targetFOV = this.defaultFOV;
+    this.camera.fov = this.defaultFOV; // Ensure initial FOV is set
+    this.camera.updateProjectionMatrix(); // Apply initial FOV
+
+    // --- Aiming State ---
+    this.isAiming = false;
+    this.adsGunPosition = new THREE.Vector3().fromArray(
+      Config.aiming.adsGunPosition
+    ); // Use Config
+    this.hipGunPosition = new THREE.Vector3(0.2, -0.2, -0.5); // Store original hip position
+    this.targetGunPosition = this.hipGunPosition.clone(); // Initialize target
+
     // --- Weapon Bobbing State ---
     this.bobTimer = 0;
-    this.bobIntensity = Config.weaponBob.intensity; // Use Config
-    this.bobSpeedFactorWalk = Config.weaponBob.speedFactorWalk; // Use Config
-    this.bobSpeedFactorNormal = Config.weaponBob.speedFactorNormal; // Use Config
-    this.bobSpeedFactorSprint = Config.weaponBob.speedFactorSprint; // Use Config
+    this.bobIntensity = Config.weaponBob.intensity;
+    this.bobSpeedFactorWalk = Config.weaponBob.speedFactorWalk;
+    this.bobSpeedFactorNormal = Config.weaponBob.speedFactorNormal;
+    this.bobSpeedFactorSprint = Config.weaponBob.speedFactorSprint;
     this.isMovingHorizontally = false;
-    this.fpGunDefaultPos = new THREE.Vector3(0.2, -0.2, -0.5);
-    // --- End Weapon Bobbing State ---
 
     // Create a group to manage camera pitch/yaw (controlled by PointerLock)
     this.cameraGroup = new THREE.Group();
@@ -89,15 +102,12 @@ export class PlayerController {
     // --- Add First-Person Gun Model ---
     this.fpGun = new GunModel();
     this.fpGunMesh = this.fpGun.getMesh();
-    // Use the stored default position
-    this.fpGunMesh.position.copy(this.fpGunDefaultPos);
+    // Use the hip position as the initial default
+    this.fpGunMesh.position.copy(this.hipGunPosition);
     this.fpGunMesh.rotation.y = -Math.PI / 20; // Slight angle
     this.fpGunMesh.scale.set(0.8, 0.8, 0.8); // Adjust scale for first-person view
     this.camera.add(this.fpGunMesh); // Add gun as child of camera
     // --- End First-Person Gun Model ---
-
-    // --- Add Lean Mode Setting ---
-    // --- End Lean Mode Setting ---
 
     // Setup event listeners
     this.setupEventListeners();
@@ -148,20 +158,23 @@ export class PlayerController {
 
     // Apply lean offset to the first-person gun (relative to camera)
     if (this.fpGunMesh) {
-      // Calculate target X based on default + lean offset
-      // We do this here AND in bobbing, bobbing takes precedence if active
+      // Calculate target X based on the CURRENT targetGunPosition (hip or ADS) + lean offset
+      const baseGunX = this.targetGunPosition.x; // Use the target (hip or ADS) as base
       const targetGunX =
-        this.fpGunDefaultPos.x -
-        leanOffset * Config.leaning.gunOffsetMultiplier; // Use Config
-      // Only lerp if not actively bobbing horizontally
-      if (!this.isMovingHorizontally || !this.isOnGround) {
-        this.fpGunMesh.position.x = THREE.MathUtils.lerp(
-          this.fpGunMesh.position.x,
-          targetGunX,
-          deltaTime * 10 // Match bobbing lerp speed
-        );
+        baseGunX - leanOffset * Config.leaning.gunOffsetMultiplier;
+
+      // Only lerp if not actively bobbing horizontally OR if aiming (ADS overrides bob horizontal offset slightly)
+      // Bobbing logic will handle lerping if moving from hip fire state
+      if (!this.isMovingHorizontally || !this.isOnGround || this.isAiming) {
+        // Lerp the X position separately if needed, bobbing handles Y/Z lerp
+        // Let updateWeaponBob handle the lerping entirely based on targetGunPosition
+        // this.fpGunMesh.position.x = THREE.MathUtils.lerp(
+        //   this.fpGunMesh.position.x,
+        //   targetGunX,
+        //   deltaTime * 10
+        // );
       }
-      // Bobbing logic will handle lerping if moving
+      // Bobbing logic will handle lerping based on targetGunPosition
     }
   }
 
@@ -182,6 +195,7 @@ export class PlayerController {
       const isSprinting = this.inputManager.isActionActive("sprint"); // Check sprint
       const isWalking = this.inputManager.isActionActive("walk"); // Check walk
       const isTryingToMove = moveF || moveB || moveL || moveR; // Check if any movement key is pressed
+      const aimActive = this.inputManager.isActionActive("aim"); // Check aim input
 
       // --- Determine Current Move Speed ---
       if (isTryingToMove && isSprinting) {
@@ -190,6 +204,10 @@ export class PlayerController {
         this.currentMoveSpeed = this.walkSpeed;
       } else {
         this.currentMoveSpeed = this.normalSpeed; // Default to normal speed
+      }
+      // Apply ADS speed multiplier
+      if (this.isAiming) {
+        this.currentMoveSpeed *= Config.aiming.adsMoveSpeedMultiplier;
       }
       // --- End Determine Current Move Speed ---
 
@@ -235,6 +253,28 @@ export class PlayerController {
       }
       // --- End Handle Lean Input ---
 
+      // --- Update Aiming State ---
+      this.isAiming = aimActive;
+      this.targetFOV = this.isAiming ? this.adsFOV : this.defaultFOV;
+      this.targetGunPosition = this.isAiming
+        ? this.adsGunPosition
+        : this.hipGunPosition;
+      // Update UI crosshair visibility
+      this.uiManager.setCrosshairVisible(!this.isAiming);
+      // --- End Aiming State ---
+
+      // --- Interpolate FOV ---
+      const fovChanged = Math.abs(this.camera.fov - this.targetFOV) > 0.01;
+      if (fovChanged) {
+        this.camera.fov = THREE.MathUtils.lerp(
+          this.camera.fov,
+          this.targetFOV,
+          deltaTime * Config.aiming.adsTransitionSpeed
+        );
+        this.camera.updateProjectionMatrix(); // IMPORTANT: Update projection matrix after FOV change
+      }
+      // --- End Interpolate FOV ---
+
       // --- Update Vaulting System ---
       const vaultPosition = this.vaultingSystem.updateVault(deltaTime);
       if (vaultPosition) {
@@ -262,7 +302,7 @@ export class PlayerController {
         if (this.vaultingSystem.isVaulting) {
           // Reset bobbing when vaulting
           this.bobTimer = 0;
-          this.fpGunMesh.position.lerp(this.fpGunDefaultPos, deltaTime * 10); // Smoothly return gun
+          this.fpGunMesh.position.lerp(this.hipGunPosition, deltaTime * 10); // Smoothly return gun
           this.currentMoveSpeed = this.normalSpeed; // Reset speed during vault? Or let it update next frame.
           return;
         }
@@ -389,9 +429,18 @@ export class PlayerController {
       // Reset bobbing when pointer lock is lost
       this.bobTimer = 0;
       this.isMovingHorizontally = false;
-      this.fpGunMesh.position.copy(this.fpGunDefaultPos); // Instantly reset gun position
+      this.fpGunMesh.position.copy(this.hipGunPosition); // Instantly reset gun position to hip
       this.currentMoveSpeed = this.normalSpeed; // Reset speed when lock lost
       this.targetLeanAmount = 0; // Reset target lean when lock is lost
+      // Reset aiming state
+      this.isAiming = false;
+      this.targetFOV = this.defaultFOV;
+      this.targetGunPosition.copy(this.hipGunPosition);
+      if (this.camera.fov !== this.defaultFOV) {
+        this.camera.fov = this.defaultFOV;
+        this.camera.updateProjectionMatrix();
+      }
+      this.uiManager.setCrosshairVisible(false); // Hide crosshair when not locked
     }
   }
 
@@ -415,45 +464,43 @@ export class PlayerController {
 
   // --- Update Weapon Bobbing Method ---
   updateWeaponBob(deltaTime) {
-    let currentBobSpeedFactor = this.bobSpeedFactorNormal; // Default
-    if (this.currentMoveSpeed === this.sprintSpeed) {
-      currentBobSpeedFactor = this.bobSpeedFactorSprint;
-    } else if (this.currentMoveSpeed === this.walkSpeed) {
-      currentBobSpeedFactor = this.bobSpeedFactorWalk;
+    let currentBobSpeedFactor = this.bobSpeedFactorNormal;
+    // Adjust intensity if aiming
+    let currentBobIntensity = this.bobIntensity;
+    if (this.isAiming) {
+      currentBobIntensity *= Config.aiming.adsBobIntensityMultiplier;
     }
 
+    // Determine the base target position (Hip or ADS)
+    // We lerp towards this base position + bobbing offsets
+    const baseTargetPos = this.targetGunPosition.clone();
+
+    // Apply lean offset to the base target X position
+    const leanOffset = this.leanAmount * Config.leaning.amountMultiplier;
+    baseTargetPos.x -= leanOffset * Config.leaning.gunOffsetMultiplier;
+
     if (this.isMovingHorizontally && this.isOnGround) {
-      // Player is moving on the ground, update bob timer
-      // Use currentMoveSpeed and the selected bob factor
       this.bobTimer +=
         deltaTime * this.currentMoveSpeed * currentBobSpeedFactor;
 
-      // Calculate bobbing offsets using sine waves
-      const verticalBob = Math.sin(this.bobTimer) * this.bobIntensity;
+      // Calculate bobbing offsets using sine waves based on adjusted intensity
+      const verticalBob = Math.sin(this.bobTimer) * currentBobIntensity;
       const horizontalBob =
-        Math.cos(this.bobTimer * 0.5) * this.bobIntensity * 0.5;
+        Math.cos(this.bobTimer * 0.5) * currentBobIntensity * 0.5;
 
-      // Apply bobbing relative to the default position + lean offset
-      const targetPos = this.fpGunDefaultPos.clone();
-      targetPos.y += verticalBob;
-      targetPos.x += horizontalBob;
+      // Apply bobbing relative to the base target position (which includes lean offset)
+      const finalTargetPos = baseTargetPos.clone(); // Start with lean-adjusted base
+      finalTargetPos.y += verticalBob;
+      finalTargetPos.x += horizontalBob; // Add bob offset AFTER lean offset
 
-      // Apply lean effect to the target position before lerping
-      const leanOffset = this.leanAmount * Config.leaning.amountMultiplier; // Use Config
-      targetPos.x -= leanOffset * Config.leaning.gunOffsetMultiplier; // Use Config
-
-      // Smoothly interpolate towards the target bob position
-      this.fpGunMesh.position.lerp(targetPos, deltaTime * 10);
+      // Smoothly interpolate towards the final target bob position
+      this.fpGunMesh.position.lerp(finalTargetPos, deltaTime * 10);
     } else {
       // Player is not moving horizontally or is airborne
-      this.bobTimer = 0; // Reset timer if stopped or in air
+      this.bobTimer = 0; // Reset timer
 
-      // Smoothly return to default position (considering lean)
-      const targetPos = this.fpGunDefaultPos.clone();
-      const leanOffset = this.leanAmount * Config.leaning.amountMultiplier; // Use Config
-      targetPos.x -= leanOffset * Config.leaning.gunOffsetMultiplier; // Use Config
-
-      this.fpGunMesh.position.lerp(targetPos, deltaTime * 10);
+      // Smoothly return to the base target position (Hip or ADS, including lean offset)
+      this.fpGunMesh.position.lerp(baseTargetPos, deltaTime * 10);
     }
   }
   // --- End Weapon Bobbing Method ---

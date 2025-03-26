@@ -33,6 +33,22 @@ export const Config = {
     duration: 0.4,
   },
 
+  // Camera
+  camera: {
+    defaultFOV: 60, // Default field of view
+  },
+
+  // Aiming (ADS)
+  aiming: {
+    adsFOV: 30, // Field of view when aiming
+    // Target gun position relative to camera when aiming
+    // Needs tuning: (X: 0 = center, Y: slightly down, Z: closer to camera)
+    adsGunPosition: [0, -0.1, -0.3],
+    adsTransitionSpeed: 12.0, // Speed of FOV and gun position transition
+    adsMoveSpeedMultiplier: 0.7, // Speed reduction while aiming (70% of normal)
+    adsBobIntensityMultiplier: 0.3, // Bob reduction while aiming (30% of normal)
+  },
+
   // Leaning
   leaning: {
     amountMultiplier: 0.5, // How much the camera offsets horizontally
