@@ -131,4 +131,10 @@ export class OtherPlayers {
 
     return playerObjects;
   }
+
+  // --- Add method to get all models ---
+  getAllModels() {
+    return Object.values(this.playerModels);
+  }
+  // --- End method ---
 }

@@ -36,14 +36,14 @@ export class WeaponSystem {
     // Load sound
     const audioLoader = new THREE.AudioLoader();
     audioLoader.load(
-      "/sounds/gunshot.mp3",
+      "/sounds/gunshot.wav",
       (buffer) => {
         this.shootSound.setBuffer(buffer);
         this.shootSound.setVolume(0.5);
       },
       undefined,
       (error) => {
-        console.warn("Error loading gunshot sound:", error);
+        console.warn("Error loading gunshot sound (.wav):", error);
       }
     );
 

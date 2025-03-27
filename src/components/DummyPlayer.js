@@ -25,4 +25,10 @@ export class DummyPlayer {
   getMeshes() {
     return this.model.getMeshes();
   }
+
+  // --- Add method to get the model instance ---
+  getModel() {
+    return this.model;
+  }
+  // --- End method ---
 }

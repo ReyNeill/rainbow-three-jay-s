@@ -35,6 +35,10 @@ export class PlayerModel {
     this.healthBarFg = null;
     this.healthBarHeightOffset = this.playerHeight * 0.5 + 0.3; // Approx offset above model center
 
+    // --- Animation ---
+    this.mixer = null; // Animation mixer
+    this.idleAction = null; // Reference to the idle animation action
+
     // --- Model Loading ---
     this.isModelLoaded = false; // Flag to track loading state
     this.loadedModelMesh = null; // To store reference to the loaded mesh
@@ -73,6 +77,7 @@ export class PlayerModel {
       modelPath,
       (gltf) => {
         this.loadedModelMesh = gltf.scene; // The loaded model group
+        const animations = gltf.animations; // Get animations from the loaded file
 
         // --- Adjust Scale and Position ---
         const box = new THREE.Box3().setFromObject(this.loadedModelMesh);
@@ -117,6 +122,41 @@ export class PlayerModel {
           this.initialPosition.z
         );
         // --- End Initial Position ---
+
+        // --- Setup Animation Mixer ---
+        if (animations && animations.length) {
+          this.mixer = new THREE.AnimationMixer(this.loadedModelMesh);
+
+          // --- DEBUGGING: Log available animation names ---
+          console.log(
+            `Available animations for ${this.options.playerId}:`,
+            animations.map((clip) => clip.name).slice(0, 10)
+          );
+          // --- End Debugging ---
+
+          // Find the idle animation clip
+          // Try the original name again, or replace with a known correct name if you find one later
+          let idleClip = THREE.AnimationClip.findByName(animations, "Idle");
+
+          if (idleClip) {
+            this.idleAction = this.mixer.clipAction(idleClip);
+            this.idleAction.play();
+            console.log(
+              `Playing animation ('${idleClip.name}') for ${this.options.playerId}`
+            );
+          } else {
+            // Log all names if the specific one isn't found
+            console.warn(
+              `Could not find animation named 'Idle' for ${this.options.playerId}. Available:`,
+              animations.map((a) => a.name)
+            );
+          }
+        } else {
+          console.warn(
+            `No animations found in model for ${this.options.playerId}`
+          );
+        }
+        // --- End Setup Animation Mixer ---
 
         this.isModelLoaded = true; // Set flag
         console.log(`Model loaded successfully for ${this.options.playerId}`);
@@ -307,6 +347,10 @@ export class PlayerModel {
 
   // Clean up resources
   dispose() {
+    // Stop animations
+    this.idleAction?.stop();
+    this.mixer = null; // Clear mixer reference
+
     // Dispose health bar geometry/material
     if (this.healthBarGroup) {
       this.healthBarGroup.traverse((child) => {
@@ -343,4 +387,14 @@ export class PlayerModel {
     this.scene.remove(this.modelGroup);
     console.log(`Disposed model for ${this.options.playerId}`);
   }
+
+  // --- Add Update Method for Mixer ---
+  update(deltaTime) {
+    // Update the animation mixer if it exists
+    this.mixer?.update(deltaTime);
+
+    // Keep health bar facing camera (moved from updatePosition)
+    this.updateHealthBar();
+  }
+  // --- End Update Method ---
 }

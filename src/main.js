@@ -146,6 +146,18 @@ function animate(time) {
   // Update player controller
   playerController.update(deltaTime);
 
+  // --- Update Player Models (Animations & Health Bars) ---
+  const allPlayerModels = [
+    ...otherPlayers.getAllModels(),
+    dummyPlayer.getModel(),
+    dummyPlayer2.getModel(),
+  ].filter((model) => model); // Filter out null/undefined models
+
+  allPlayerModels.forEach((model) => {
+    model.update(deltaTime); // Update mixer and health bar billboard
+  });
+  // --- End Update Player Models ---
+
   // Update Lean Mode Display (Optional)
   if (playerController.leanMode !== lastLeanMode) {
     lastLeanMode = playerController.leanMode;
