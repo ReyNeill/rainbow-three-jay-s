@@ -101,19 +101,6 @@ export class WeaponSystem {
   performRaycast() {
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
-    // --- Log Collidables Being Checked ---
-    console.log(
-      `[WeaponSystem Raycast] Checking ${this.collidableObjects.length} objects:`,
-      this.collidableObjects.map((o) => ({
-        name: o.name || "(no name)",
-        uuid: o.uuid,
-        isMesh: o.isMesh,
-        isGroup: o.isGroup,
-        userData: JSON.stringify(o.userData),
-      }))
-    );
-    // --- End Log ---
-
     const intersects = this.raycaster.intersectObjects(
       this.collidableObjects,
       true
@@ -123,46 +110,32 @@ export class WeaponSystem {
       const hit = intersects[0];
       const hitObject = hit.object;
 
-      // --- DEBUG: Log what was hit (include UUID) ---
-      console.log(
-        "Raycast Hit:",
-        hitObject.name || "(no name)", // Ensure name is shown
-        `(UUID: ${hitObject.uuid})`, // Log hit object's UUID
-        "UserData:",
-        JSON.stringify(hitObject.userData) // Stringify userData for clearer logging
-      );
-      // --- End Debug ---
-
       let hitConfirmed = false;
-      let targetHit = false;
 
+      // 1. Check if Player/Dummy was hit
       if (hitObject.userData.playerId) {
         this.createHitEffect(hit.point);
-        console.log(
-          `Checking if hit object ID '${hitObject.userData.playerId}' matches any dummy...`
-        );
+        hitConfirmed = true;
+
+        // Check if it's one of the dummy players
+        let isDummy = false;
         for (const dummy of this.dummyPlayers) {
           const dummyModelId = dummy.getModel()?.options?.playerId;
-          console.log(`  Comparing with dummy ID: '${dummyModelId}'`);
           if (dummyModelId && dummyModelId === hitObject.userData.playerId) {
-            console.log(`>>> Match found! Hitting dummy: ${dummyModelId}`);
             dummy.hit(25);
-            hitConfirmed = true;
-            targetHit = true;
+            isDummy = true;
             break;
           }
         }
-        if (!targetHit) {
-          console.log("...No dummy match found for this playerId.");
-        }
-      } else {
-        console.log("Hit object does not have userData.playerId.");
-      }
 
-      if (!targetHit && hitObject.userData.isTarget) {
-        console.log("Hit target!");
+        // If it wasn't a dummy, assume it's a networked player
+        if (!isDummy && this.networkManager) {
+          this.networkManager.sendPlayerShot(hitObject.userData.playerId, 25);
+        }
+
+        // 2. Else, check if a Target was hit
+      } else if (hitObject.userData.isTarget) {
         hitConfirmed = true;
-        targetHit = true;
         const targetPosition = hitObject.getWorldPosition(new THREE.Vector3());
 
         this.collidableObjects = this.collidableObjects.filter(
@@ -190,21 +163,16 @@ export class WeaponSystem {
             }, 5000);
           });
         }
-      } else if (
-        !targetHit &&
-        this.networkManager &&
-        hitObject.userData &&
-        hitObject.userData.playerId
-      ) {
-        console.log("Shot networked player:", hitObject.userData.playerId);
-        this.networkManager.sendPlayerShot(hitObject.userData.playerId, 25);
+
+        // 3. Else, it hit something generic (wall, floor etc.)
+      } else {
+        this.createDebrisEffect(hit.point);
       }
 
+      // Show hit marker if any valid hit was confirmed
       if (hitConfirmed && this.uiManager) {
         this.uiManager.showHitMarker();
       }
-    } else {
-      console.log("Raycast intersected nothing.");
     }
   }
 
@@ -253,54 +221,140 @@ export class WeaponSystem {
     const material = new THREE.MeshBasicMaterial({
       color: 0xcc0000,
     });
+    const gravity = new THREE.Vector3(0, -9.8, 0);
+    const particles = [];
 
     for (let i = 0; i < particleCount; i++) {
-      const particle = new THREE.Mesh(geometry.clone(), material.clone());
-      const direction = new THREE.Vector3(
-        Math.random() - 0.5,
-        Math.random() * 0.8,
-        Math.random() - 0.5
-      ).normalize();
-      const distance = Math.random() * 0.5 + 0.1;
-      particle.position.copy(position).addScaledVector(direction, distance);
-      splatterGroup.add(particle);
+      const particleMesh = new THREE.Mesh(geometry.clone(), material.clone());
+      const velocity = new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        Math.random() * 2.5 + 0.5,
+        (Math.random() - 0.5) * 2
+      );
+      const particleData = { mesh: particleMesh, velocity: velocity };
+      particleMesh.position.copy(position);
+      splatterGroup.add(particleMesh);
+      particles.push(particleData);
     }
 
     this.scene.add(splatterGroup);
 
-    // Fade out and remove
-    const duration = 500;
-    const startTime = Date.now();
+    const duration = 800;
+    const startTime = performance.now();
+    let lastTime = startTime;
 
     const fade = () => {
-      const elapsed = Date.now() - startTime;
+      const currentTime = performance.now();
+      const deltaTime = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
+
+      const elapsed = currentTime - startTime;
       const progress = Math.min(1, elapsed / duration);
+
+      if (!splatterGroup.parent) {
+        particles.forEach((p) => {
+          p.mesh.geometry.dispose();
+          p.mesh.material.dispose();
+        });
+        return;
+      }
+
+      particles.forEach((p) => {
+        p.velocity.addScaledVector(gravity, deltaTime);
+        p.mesh.position.addScaledVector(p.velocity, deltaTime);
+      });
+
       const scale = 1 - progress * 0.5;
+      splatterGroup.scale.set(scale, scale, scale);
 
-      if (splatterGroup.parent) {
-        splatterGroup.scale.set(scale, scale, scale);
-        splatterGroup.children.forEach((p) => {});
-
-        if (progress < 1) {
-          requestAnimationFrame(fade);
-        } else {
-          // Cleanup after fade
-          this.scene.remove(splatterGroup);
-          splatterGroup.children.forEach((p) => {
-            p.geometry.dispose();
-            p.material.dispose();
-          });
-        }
+      if (progress < 1) {
+        requestAnimationFrame(fade);
       } else {
-        splatterGroup.children.forEach((p) => {
-          p.geometry.dispose();
-          p.material.dispose();
+        this.scene.remove(splatterGroup);
+        particles.forEach((p) => {
+          p.mesh.geometry.dispose();
+          p.mesh.material.dispose();
         });
       }
     };
 
     requestAnimationFrame(fade);
     // --- End Blood Splatter Effect ---
+  }
+
+  createDebrisEffect(position) {
+    const debrisGroup = new THREE.Group();
+    const particleCount = 15;
+    const particleSize = 0.04;
+    const geometry = new THREE.BoxGeometry(
+      particleSize,
+      particleSize,
+      particleSize
+    );
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x888888,
+      roughness: 0.8,
+      metalness: 0.1,
+    });
+    const gravity = new THREE.Vector3(0, -9.8, 0);
+    const particles = [];
+
+    for (let i = 0; i < particleCount; i++) {
+      const particleMesh = new THREE.Mesh(geometry.clone(), material.clone());
+      const velocity = new THREE.Vector3(
+        (Math.random() - 0.5) * 1.5,
+        Math.random() * 1.5 + 0.2,
+        (Math.random() - 0.5) * 1.5
+      );
+      const particleData = { mesh: particleMesh, velocity: velocity };
+      particleMesh.position.copy(position);
+      particleMesh.rotation.set(
+        Math.random() * Math.PI,
+        Math.random() * Math.PI,
+        Math.random() * Math.PI
+      );
+      debrisGroup.add(particleMesh);
+      particles.push(particleData);
+    }
+
+    this.scene.add(debrisGroup);
+
+    const duration = 600;
+    const startTime = performance.now();
+    let lastTime = startTime;
+
+    const animateDebris = () => {
+      const currentTime = performance.now();
+      const deltaTime = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
+
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(1, elapsed / duration);
+
+      if (!debrisGroup.parent) {
+        particles.forEach((p) => {
+          p.mesh.geometry.dispose();
+          p.mesh.material.dispose();
+        });
+        return;
+      }
+
+      particles.forEach((p) => {
+        p.velocity.addScaledVector(gravity, deltaTime);
+        p.mesh.position.addScaledVector(p.velocity, deltaTime);
+      });
+
+      if (progress < 1) {
+        requestAnimationFrame(animateDebris);
+      } else {
+        this.scene.remove(debrisGroup);
+        particles.forEach((p) => {
+          p.mesh.geometry.dispose();
+          p.mesh.material.dispose();
+        });
+      }
+    };
+    requestAnimationFrame(animateDebris);
   }
 
   update() {

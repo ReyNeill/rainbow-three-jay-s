@@ -71,41 +71,12 @@ function syncCollidableObjects() {
   const dummy1Meshes = dummyPlayer.getMeshes();
   const dummy2Meshes = dummyPlayer2 ? dummyPlayer2.getMeshes() : [];
 
-  console.log("Syncing Collidables:"); // Keep logs for now
-  console.log(`  GameMap: ${gameMapObjects.length} objects`);
-  console.log(
-    `  OtherPlayers: ${otherPlayerMeshes.length} meshes`,
-    otherPlayerMeshes.map((m) => ({
-      name: m.name,
-      uuid: m.uuid,
-      userData: JSON.stringify(m.userData),
-    }))
-  );
-  console.log(
-    `  Dummy1: ${dummy1Meshes.length} meshes`,
-    dummy1Meshes.map((m) => ({
-      name: m.name,
-      uuid: m.uuid,
-      userData: JSON.stringify(m.userData),
-    }))
-  );
-  console.log(
-    `  Dummy2: ${dummy2Meshes.length} meshes`,
-    dummy2Meshes.map((m) => ({
-      name: m.name,
-      uuid: m.uuid,
-      userData: JSON.stringify(m.userData),
-    }))
-  );
-
   const allCollidables = [
     ...gameMapObjects,
     ...otherPlayerMeshes,
     ...dummy1Meshes,
     ...dummy2Meshes,
   ];
-
-  console.log(`  Total Collidables: ${allCollidables.length}`);
 
   playerController.setCollidableObjects(allCollidables);
   // Ensure weaponSystem exists before setting collidables
