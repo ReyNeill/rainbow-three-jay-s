@@ -10,7 +10,8 @@ export class WeaponSystem {
     inputManager,
     uiManager,
     dummyPlayer = null,
-    fpGun = null
+    fpGun = null,
+    playerController = null
   ) {
     this.scene = scene;
     this.camera = camera;
@@ -20,6 +21,7 @@ export class WeaponSystem {
     this.uiManager = uiManager;
     this.dummyPlayer = dummyPlayer;
     this.fpGun = fpGun;
+    this.playerController = playerController;
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(0, 0); // Center of screen
     this.shooting = false;
@@ -93,6 +95,11 @@ export class WeaponSystem {
         this.shootSound.stop();
       }
       this.shootSound.play();
+    }
+
+    // Trigger recoil on PlayerController
+    if (this.playerController) {
+      this.playerController.applyRecoil();
     }
 
     // Create muzzle flash visual effect

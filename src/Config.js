@@ -64,5 +64,13 @@ export const Config = {
     speedFactorSprint: 2.0,
   },
 
+  // Weapon Recoil
+  recoil: {
+    pitchAmount: 0.02, // Radians the camera pitches up per shot
+    kickAmount: 0.03, // Units the gun kicks back per shot
+    recoverySpeed: 10.0, // Speed at which recoil recovers (higher = faster)
+    adsMultiplier: 0.4, // Recoil multiplier when aiming (40% of normal)
+  },
+
   // Add other shared constants here as needed
 };

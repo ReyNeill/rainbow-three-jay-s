@@ -76,12 +76,13 @@ const dummyPlayer2 = new DummyPlayer(scene, { x: 5, y: 0.8, z: -15 });
 const weaponSystem = new WeaponSystem(
   scene,
   camera,
-  playerController.collisionDetection.objects, // Get initial list from playerController
+  gameMap.getCollidableObjects(), // Pass collidables from map
   networkManager,
   inputManager,
   uiManager,
-  dummyPlayer,
-  playerController.getFPGun()
+  dummyPlayer, // Pass dummy player
+  playerController.getFPGun(), // Pass first-person gun model reference
+  playerController // Pass playerController instance
 );
 
 // Pass the target instances to weapon system (can happen after initialization)

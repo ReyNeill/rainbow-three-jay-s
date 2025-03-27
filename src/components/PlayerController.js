@@ -52,6 +52,11 @@ export class PlayerController {
     this.leanAmount = 0; // -1 (left), 0 (center), 1 (right)
     this.targetLeanAmount = 0;
     this.leanMode = "toggle"; // "toggle" or "hold"
+    this.leanToggleState = false; // For toggle mode
+
+    // --- Recoil State ---
+    this.recoilPitch = 0; // Current vertical recoil rotation
+    this.recoilKick = 0; // Current backward recoil displacement
 
     // Movement speed and physics
     this.velocity = new THREE.Vector3();
@@ -414,6 +419,9 @@ export class PlayerController {
       // --- Update Weapon Bobbing ---
       this.updateWeaponBob(deltaTime);
       // --- End Weapon Bobbing ---
+
+      // Update recoil
+      this.updateRecoil(deltaTime);
     } else {
       // Not pointer locked
       this.velocity.set(0, 0, 0);
@@ -503,4 +511,51 @@ export class PlayerController {
     }
   }
   // --- End Weapon Bobbing Method ---
+
+  // --- Apply Recoil Method ---
+  applyRecoil() {
+    let pitch = Config.recoil.pitchAmount;
+    let kick = Config.recoil.kickAmount;
+
+    // Reduce recoil if aiming
+    if (this.isAiming) {
+      pitch *= Config.recoil.adsMultiplier;
+      kick *= Config.recoil.adsMultiplier;
+    }
+
+    // Add recoil impulse (will be recovered in updateRecoil)
+    this.recoilPitch += pitch;
+    this.recoilKick += kick;
+
+    // Optional: Clamp max recoil accumulation if needed
+    // this.recoilPitch = Math.min(this.recoilPitch, MAX_RECOIL_PITCH);
+    // this.recoilKick = Math.min(this.recoilKick, MAX_RECOIL_KICK);
+  }
+
+  // --- Update Recoil Method ---
+  updateRecoil(deltaTime) {
+    const recoveryFactor = deltaTime * Config.recoil.recoverySpeed;
+
+    // Apply current recoil
+    // Pitch affects camera directly (additively)
+    this.camera.rotation.x += this.recoilPitch * recoveryFactor; // Apply a portion this frame
+
+    // Kick affects gun position directly (additively)
+    // Note: Positive Z is towards camera, so add kick
+    if (this.fpGunMesh) {
+      this.fpGunMesh.position.z += this.recoilKick * recoveryFactor; // Apply a portion this frame
+    }
+
+    // Smoothly recover recoil towards zero
+    this.recoilPitch = THREE.MathUtils.lerp(
+      this.recoilPitch,
+      0,
+      recoveryFactor
+    );
+    this.recoilKick = THREE.MathUtils.lerp(this.recoilKick, 0, recoveryFactor);
+
+    // Snap to zero if very close to avoid tiny lingering values
+    if (Math.abs(this.recoilPitch) < 0.0001) this.recoilPitch = 0;
+    if (Math.abs(this.recoilKick) < 0.0001) this.recoilKick = 0;
+  }
 }
