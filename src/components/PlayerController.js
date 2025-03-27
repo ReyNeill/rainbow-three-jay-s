@@ -105,7 +105,7 @@ export class PlayerController {
     );
 
     // --- Add First-Person Gun Model ---
-    this.fpGun = new GunModel();
+    this.fpGun = new GunModel(this.scene);
     this.fpGunMesh = this.fpGun.getMesh();
     // Use the hip position as the initial default
     this.fpGunMesh.position.copy(this.hipGunPosition);

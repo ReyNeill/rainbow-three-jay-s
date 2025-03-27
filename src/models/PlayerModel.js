@@ -102,11 +102,6 @@ export class PlayerModel {
         this.loadedModelMesh.traverse((child) => {
           if (child.isMesh) {
             child.userData.playerId = this.options.playerId;
-            console.log(
-              `Assigned ID ${this.options.playerId} to mesh: ${
-                child.name || "(no name)"
-              } (UUID: ${child.uuid})`
-            );
           }
         });
         // --- End Add userData ---
@@ -115,13 +110,6 @@ export class PlayerModel {
         if (animations && animations.length) {
           this.mixer = new THREE.AnimationMixer(this.loadedModelMesh);
 
-          // --- DEBUGGING: Log available animation names ---
-          console.log(
-            `Available animations for ${this.options.playerId}:`,
-            animations.map((clip) => clip.name).slice(0, 10)
-          );
-          // --- End Debugging ---
-
           // Find the idle animation clip
           // Try the original name again, or replace with a known correct name if you find one later
           let idleClip = THREE.AnimationClip.findByName(animations, "Idle");
@@ -129,9 +117,6 @@ export class PlayerModel {
           if (idleClip) {
             this.idleAction = this.mixer.clipAction(idleClip);
             this.idleAction.play();
-            console.log(
-              `Playing animation ('${idleClip.name}') for ${this.options.playerId}`
-            );
           } else {
             // Log all names if the specific one isn't found
             console.warn(
@@ -147,7 +132,6 @@ export class PlayerModel {
         // --- End Setup Animation Mixer ---
 
         this.isModelLoaded = true;
-        console.log(`Model loaded successfully for ${this.options.playerId}`);
 
         // --- Call onLoad callback if provided ---
         if (this.options.onLoad) {
@@ -170,9 +154,6 @@ export class PlayerModel {
 
     this.health -= damage;
     this.health = Math.max(0, this.health); // Prevent negative health
-    console.log(
-      `Player ${this.options.playerId} hit. Health: ${this.health}/${this.maxHealth}`
-    );
 
     return this.health > 0; // Return true if still alive
   }
@@ -218,17 +199,9 @@ export class PlayerModel {
       this.loadedModelMesh.traverse((child) => {
         if (child.isMesh) {
           meshes.push(child);
-          console.log(
-            `[getMeshes for ${this.options.playerId}] Adding mesh: ${
-              child.name || "(no name)"
-            } (UUID: ${child.uuid}), UserData: ${JSON.stringify(
-              child.userData
-            )}`
-          );
         }
       });
     }
-    // console.log(`getMeshes for ${this.options.playerId}: Returning ${meshes.length} meshes`); // Optional summary log
     return meshes;
   }
 
@@ -261,7 +234,6 @@ export class PlayerModel {
 
     // Remove the main group from the scene
     this.scene.remove(this.modelGroup);
-    console.log(`Disposed model for ${this.options.playerId}`);
   }
 
   // --- Add Update Method for Mixer ---

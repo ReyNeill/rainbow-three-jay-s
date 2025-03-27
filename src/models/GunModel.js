@@ -1,13 +1,18 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 export class GunModel {
-  constructor(options = {}) {
+  constructor(scene, options = {}) {
+    this.scene = scene;
     this.options = {
       color: 0x222222, // Darker color for rifle
       sightColor: 0x111111,
       lensColor: 0x55aaff, // Blueish tint for lens
       ...options,
     };
+
+    this.sightModelMesh = null;
+    this.isSightLoaded = false;
 
     this.createModel();
   }
@@ -19,20 +24,6 @@ export class GunModel {
       color: this.options.color,
       roughness: 0.6,
       metalness: 0.3,
-    });
-    const sightMaterial = new THREE.MeshStandardMaterial({
-      color: this.options.sightColor,
-      roughness: 0.4,
-      metalness: 0.1,
-      side: THREE.DoubleSide,
-    });
-    const lensMaterial = new THREE.MeshStandardMaterial({
-      color: this.options.lensColor,
-      roughness: 0.1,
-      metalness: 0.0,
-      transparent: true,
-      opacity: 0.15,
-      side: THREE.DoubleSide,
     });
 
     // --- Rifle Components ---
@@ -96,48 +87,8 @@ export class GunModel {
     magazine.rotation.x = Math.PI / 25; // Slight angle forward
     this.gunGroup.add(magazine);
 
-    // --- ACOG Sight Components ---
-    const sightGroup = new THREE.Group();
-
-    // Scope Body (Main tube)
-    const scopeBodyLength = 0.15;
-    const scopeBodyRadius = 0.03;
-    const scopeBodyGeo = new THREE.CylinderGeometry(
-      scopeBodyRadius,
-      scopeBodyRadius,
-      scopeBodyLength,
-      16,
-      1,
-      true
-    );
-    const scopeBody = new THREE.Mesh(scopeBodyGeo, sightMaterial);
-    scopeBody.rotation.x = Math.PI / 2; // Align with Z axis
-    sightGroup.add(scopeBody);
-
-    // Scope Mount (Connects scope to receiver)
-    const mountGeo = new THREE.BoxGeometry(0.03, 0.03, 0.1);
-    const mount = new THREE.Mesh(mountGeo, sightMaterial);
-    mount.position.y = -scopeBodyRadius - 0.015; // Position below scope body
-    sightGroup.add(mount);
-
-    // Front Lens Placeholder
-    const lensGeo = new THREE.CircleGeometry(scopeBodyRadius * 0.9, 16);
-    const frontLens = new THREE.Mesh(lensGeo, lensMaterial);
-    frontLens.position.z = -scopeBodyLength / 2 - 0.001; // Position relative to sightGroup origin
-    frontLens.castShadow = false;
-    frontLens.receiveShadow = false;
-    sightGroup.add(frontLens);
-
-    // Rear Lens Placeholder
-    const rearLens = new THREE.Mesh(lensGeo, lensMaterial);
-    rearLens.position.z = scopeBodyLength / 2 + 0.001; // Position relative to sightGroup origin
-    rearLens.castShadow = false;
-    rearLens.receiveShadow = false;
-    sightGroup.add(rearLens);
-
-    // Position the sight group on top of the receiver
-    sightGroup.position.set(0, 0.1 / 2 + scopeBodyRadius + 0.015, -0.05); // Y: receiver_half_height + mount_half_height + scope_radius
-    this.gunGroup.add(sightGroup);
+    // --- Load ACOG Sight Model ---
+    this.loadSightModel();
 
     // --- Barrel Tip ---
     // Update barrel tip position for the longer barrel
@@ -148,6 +99,72 @@ export class GunModel {
     // --- Final Adjustments ---
     // Rotate the entire gun model slightly downwards for a natural holding pose
     this.gunGroup.rotation.x = Math.PI / 100;
+  }
+
+  loadSightModel() {
+    const loader = new GLTFLoader();
+    const modelPath = "/models/acog.glb";
+
+    loader.load(
+      modelPath,
+      (gltf) => {
+        this.sightModelMesh = gltf.scene;
+        console.log("Loaded ACOG GLTF Scene:", this.sightModelMesh);
+
+        // Adjust internal object position (Keep this fix)
+        const internalACOGObject = this.sightModelMesh.getObjectByName("ACOG");
+        if (internalACOGObject) {
+          console.log(
+            "Found internal 'ACOG' object. Original Y:",
+            internalACOGObject.position.y
+          );
+          internalACOGObject.position.y = 0;
+          internalACOGObject.position.x = 0;
+          console.log(
+            "Adjusted internal 'ACOG' object position:",
+            internalACOGObject.position.toArray()
+          );
+        } else {
+          console.warn(
+            "Could not find internal object named 'ACOG' to adjust position."
+          );
+        }
+
+        // --- ADJUST THIS SCALE ---
+        // Decrease the scale factor
+        const desiredSightScale = 0.021;
+        // --- END ADJUSTMENT ---
+
+        this.sightModelMesh.scale.set(
+          desiredSightScale,
+          desiredSightScale,
+          desiredSightScale
+        );
+
+        // Position the root scene (Keep this)
+        this.sightModelMesh.position.set(0, 0.04, -0.05); // Keep Y=0.04 or adjust if needed
+
+        console.log(
+          "Set sight position (on scene group):",
+          this.sightModelMesh.position.toArray()
+        );
+        console.log(
+          // Log the scale too
+          "Set sight scale:",
+          this.sightModelMesh.scale.toArray()
+        );
+
+        this.sightModelMesh.rotation.y = Math.PI;
+
+        this.gunGroup.add(this.sightModelMesh);
+        this.isSightLoaded = true;
+        console.log("ACOG sight model loaded and added to gun.");
+      },
+      undefined,
+      (error) => {
+        console.error("Error loading ACOG sight model:", error);
+      }
+    );
   }
 
   // Get the main group containing the gun parts
@@ -164,22 +181,48 @@ export class GunModel {
 
   // Clean up resources
   dispose() {
+    if (this.sightModelMesh) {
+      this.sightModelMesh.traverse((child) => {
+        if (child.isMesh) {
+          child.geometry?.dispose();
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach((mat) => {
+                mat.map?.dispose();
+                mat.dispose();
+              });
+            } else {
+              child.material.map?.dispose();
+              child.material.dispose();
+            }
+          }
+        }
+      });
+      this.gunGroup?.remove(this.sightModelMesh);
+      this.sightModelMesh = null;
+    }
+
     this.gunGroup.traverse((child) => {
-      if (child.isMesh) {
-        child.geometry.dispose();
-        // Dispose materials carefully, especially if shared or cloned
+      if (child !== this.sightModelMesh && child.isMesh) {
+        child.geometry?.dispose();
         if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach((mat) => mat.dispose());
-          } else {
-            child.material.dispose();
+          if (
+            child.material.uuid ===
+            this.gunGroup.children.find((c) => c.isMesh)?.material.uuid
+          ) {
+            // Assuming the first mesh uses the bodyMaterial we created.
+            // This is brittle. Better: Store created materials explicitly.
+            // child.material.dispose(); // Be careful here
           }
         }
       }
     });
-    // Also dispose materials created directly
-    this.options.bodyMaterial?.dispose();
-    this.options.sightMaterial?.dispose();
-    this.options.lensMaterial?.dispose();
+
+    const bodyMat = this.gunGroup.children.find(
+      (c) => c.isMesh && c.material?.isMeshStandardMaterial
+    )?.material;
+    bodyMat?.dispose();
+
+    console.log("Disposed gun model resources.");
   }
 }
