@@ -9,7 +9,7 @@ export class WeaponSystem {
     networkManager,
     inputManager,
     uiManager,
-    dummyPlayer = null,
+    dummyPlayers = [],
     fpGun = null,
     playerController = null
   ) {
@@ -19,7 +19,7 @@ export class WeaponSystem {
     this.networkManager = networkManager;
     this.inputManager = inputManager;
     this.uiManager = uiManager;
-    this.dummyPlayer = dummyPlayer;
+    this.dummyPlayers = dummyPlayers;
     this.fpGun = fpGun;
     this.playerController = playerController;
     this.raycaster = new THREE.Raycaster();
@@ -68,16 +68,6 @@ export class WeaponSystem {
     this.collidableObjects = objects;
   }
 
-  setDummyPlayer(dummyPlayer) {
-    this.dummyPlayer = dummyPlayer;
-
-    // Add dummy player meshes to collidable objects
-    if (dummyPlayer) {
-      const dummyMeshes = dummyPlayer.getMeshes();
-      this.collidableObjects = [...this.collidableObjects, ...dummyMeshes];
-    }
-  }
-
   triggerShoot() {
     if (this.cooldown || !this.inputManager.getIsPointerLocked()) return;
 
@@ -110,6 +100,20 @@ export class WeaponSystem {
 
   performRaycast() {
     this.raycaster.setFromCamera(this.mouse, this.camera);
+
+    // --- Log Collidables Being Checked ---
+    console.log(
+      `[WeaponSystem Raycast] Checking ${this.collidableObjects.length} objects:`,
+      this.collidableObjects.map((o) => ({
+        name: o.name || "(no name)",
+        uuid: o.uuid,
+        isMesh: o.isMesh,
+        isGroup: o.isGroup,
+        userData: JSON.stringify(o.userData),
+      }))
+    );
+    // --- End Log ---
+
     const intersects = this.raycaster.intersectObjects(
       this.collidableObjects,
       true
@@ -117,99 +121,99 @@ export class WeaponSystem {
 
     if (intersects.length > 0) {
       const hit = intersects[0];
-
-      // Create hit effect at impact point
-      this.createHitEffect(hit.point);
-
-      // Check if we hit a player (by checking parent or userData)
       const hitObject = hit.object;
 
-      let hitConfirmed = false;
+      // --- DEBUG: Log what was hit (include UUID) ---
+      console.log(
+        "Raycast Hit:",
+        hitObject.name || "(no name)", // Ensure name is shown
+        `(UUID: ${hitObject.uuid})`, // Log hit object's UUID
+        "UserData:",
+        JSON.stringify(hitObject.userData) // Stringify userData for clearer logging
+      );
+      // --- End Debug ---
 
-      // Handle dummy player hit
-      if (this.dummyPlayer && hitObject.userData.playerId === "dummy") {
-        this.dummyPlayer.hit(25); // Apply damage to dummy
-        hitConfirmed = true;
-        console.log("Hit dummy player!");
-        // No network event needed for dummy
+      let hitConfirmed = false;
+      let targetHit = false;
+
+      if (hitObject.userData.playerId) {
+        this.createHitEffect(hit.point);
+        console.log(
+          `Checking if hit object ID '${hitObject.userData.playerId}' matches any dummy...`
+        );
+        for (const dummy of this.dummyPlayers) {
+          const dummyModelId = dummy.getModel()?.options?.playerId;
+          console.log(`  Comparing with dummy ID: '${dummyModelId}'`);
+          if (dummyModelId && dummyModelId === hitObject.userData.playerId) {
+            console.log(`>>> Match found! Hitting dummy: ${dummyModelId}`);
+            dummy.hit(25);
+            hitConfirmed = true;
+            targetHit = true;
+            break;
+          }
+        }
+        if (!targetHit) {
+          console.log("...No dummy match found for this playerId.");
+        }
+      } else {
+        console.log("Hit object does not have userData.playerId.");
       }
 
-      // Handle target hit
-      else if (hitObject.userData.isTarget) {
+      if (!targetHit && hitObject.userData.isTarget) {
+        console.log("Hit target!");
         hitConfirmed = true;
-        // Get the target position for respawning later
-        const targetPosition = hitObject.getWorldPosition(new THREE.Vector3()); // Get world position
+        targetHit = true;
+        const targetPosition = hitObject.getWorldPosition(new THREE.Vector3());
 
-        // Remove target from collidable objects
         this.collidableObjects = this.collidableObjects.filter(
           (obj) => obj !== hitObject
         );
 
-        // Play target hit sound
         if (this.shootSound && this.shootSound.buffer) {
-          // Clone the audio for multiple overlapping sounds
           const hitSound = this.shootSound.clone();
           hitSound.setVolume(0.3);
           hitSound.play();
         }
 
-        console.log("Hit target!");
-
-        // Find the target instance for this mesh
         const targetInstance = this.findTargetByMesh(hitObject);
         if (targetInstance) {
           targetInstance.hit(() => {
-            // Respawn target after 5 seconds
             setTimeout(() => {
-              // Create new target using the TargetModel
               const newTarget = TargetModel.createWithRespawnEffect(
                 this.scene,
-                targetPosition // Use stored world position
+                targetPosition
               );
-
-              // Add to collidable objects
               this.collidableObjects.push(newTarget.getMesh());
-
-              // Store the target instance
               if (!this.targets) this.targets = [];
-              // Remove old instance if it exists in the array, add new one
               this.targets = this.targets.filter((t) => t !== targetInstance);
               this.targets.push(newTarget);
-            }, 5000); // 5 seconds
+            }, 5000);
           });
         }
-
-        // No network event needed for static targets
-      }
-
-      // Handle hitting another player
-      else if (
+      } else if (
+        !targetHit &&
         this.networkManager &&
         hitObject.userData &&
         hitObject.userData.playerId
       ) {
-        // Use NetworkManager to send the event
+        console.log("Shot networked player:", hitObject.userData.playerId);
         this.networkManager.sendPlayerShot(hitObject.userData.playerId, 25);
-        // Note: Hit confirmation (UI marker) is now handled by NetworkManager receiving 'hitConfirmed'
-        // We don't set hitConfirmed = true here for player hits.
-        console.log("Shot player:", hitObject.userData.playerId);
       }
 
-      // Show UI hit marker ONLY for confirmed non-player hits (dummy, target)
       if (hitConfirmed && this.uiManager) {
         this.uiManager.showHitMarker();
       }
+    } else {
+      console.log("Raycast intersected nothing.");
     }
   }
 
-  // Find a target instance by its mesh
   findTargetByMesh(mesh) {
     if (!this.targets) return null;
     return this.targets.find((target) => target.getMesh() === mesh);
   }
 
   createMuzzleFlash() {
-    // Create a simple particle effect for muzzle flash
     const geometry = new THREE.SphereGeometry(0.05, 8, 8);
     const material = new THREE.MeshBasicMaterial({
       color: 0xffff00,
@@ -219,12 +223,10 @@ export class WeaponSystem {
 
     const flash = new THREE.Mesh(geometry, material);
 
-    // Position at the gun's barrel tip if available, otherwise default
     let flashPos;
     if (this.fpGun) {
-      flashPos = this.fpGun.getBarrelTipPosition(); // Get world position of barrel tip
+      flashPos = this.fpGun.getBarrelTipPosition();
     } else {
-      // Fallback: Position slightly in front of camera
       flashPos = new THREE.Vector3(0, 0, -0.5).applyMatrix4(
         this.camera.matrixWorld
       );
@@ -233,10 +235,8 @@ export class WeaponSystem {
 
     this.scene.add(flash);
 
-    // Remove after short time
     setTimeout(() => {
       if (flash.parent) {
-        // Check if still attached before removing
         this.scene.remove(flash);
       }
       geometry.dispose();
@@ -245,36 +245,67 @@ export class WeaponSystem {
   }
 
   createHitEffect(position) {
-    // Create a simple particle effect for hit impact
-    const geometry = new THREE.SphereGeometry(0.1, 8, 8);
+    // --- Blood Splatter Effect ---
+    const splatterGroup = new THREE.Group();
+    const particleCount = 25;
+    const particleSize = 0.05;
+    const geometry = new THREE.SphereGeometry(particleSize, 5, 5);
     const material = new THREE.MeshBasicMaterial({
-      color: 0xff0000,
-      transparent: true,
-      opacity: 0.8,
+      color: 0xcc0000,
     });
 
-    const hitMarker = new THREE.Mesh(geometry, material);
-    hitMarker.position.copy(position);
+    for (let i = 0; i < particleCount; i++) {
+      const particle = new THREE.Mesh(geometry.clone(), material.clone());
+      const direction = new THREE.Vector3(
+        Math.random() - 0.5,
+        Math.random() * 0.8,
+        Math.random() - 0.5
+      ).normalize();
+      const distance = Math.random() * 0.5 + 0.1;
+      particle.position.copy(position).addScaledVector(direction, distance);
+      splatterGroup.add(particle);
+    }
 
-    this.scene.add(hitMarker);
+    this.scene.add(splatterGroup);
 
-    // Remove after short time
-    setTimeout(() => {
-      this.scene.remove(hitMarker);
-      geometry.dispose();
-      material.dispose();
-    }, 200);
+    // Fade out and remove
+    const duration = 500;
+    const startTime = Date.now();
+
+    const fade = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      const scale = 1 - progress * 0.5;
+
+      if (splatterGroup.parent) {
+        splatterGroup.scale.set(scale, scale, scale);
+        splatterGroup.children.forEach((p) => {});
+
+        if (progress < 1) {
+          requestAnimationFrame(fade);
+        } else {
+          // Cleanup after fade
+          this.scene.remove(splatterGroup);
+          splatterGroup.children.forEach((p) => {
+            p.geometry.dispose();
+            p.material.dispose();
+          });
+        }
+      } else {
+        splatterGroup.children.forEach((p) => {
+          p.geometry.dispose();
+          p.material.dispose();
+        });
+      }
+    };
+
+    requestAnimationFrame(fade);
+    // --- End Blood Splatter Effect ---
   }
 
   update() {
-    // Check for shoot action press/hold
     if (this.inputManager.isActionPressed("shoot")) {
       this.triggerShoot();
     }
-    // If continuous fire is desired while holding:
-    // (Already handled by the setTimeout logic in triggerShoot)
-    // else if (this.inputManager.isActionActive("shoot")) {
-    //   // Potentially trigger continuous fire logic if needed
-    // }
   }
 }

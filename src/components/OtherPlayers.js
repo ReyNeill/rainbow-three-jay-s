@@ -6,10 +6,17 @@ export class OtherPlayers {
     this.scene = scene;
     this.players = {}; // Stores player data from server { id: { position, rotation, leanAmount, team, health } }
     this.playerModels = {}; // Stores PlayerModel instances { id: PlayerModel }
+    this.onLoadCallback = null; // Add callback reference
 
     // Materials are now handled by PlayerModel based on team option
     // Lean parameters are now handled by PlayerModel
   }
+
+  // --- Add method to set the callback ---
+  setOnLoadCallback(callback) {
+    this.onLoadCallback = callback;
+  }
+  // --- End method ---
 
   addPlayer(playerData) {
     // Store player data
@@ -20,6 +27,7 @@ export class OtherPlayers {
       team: playerData.team,
       playerId: playerData.id,
       health: playerData.health !== undefined ? playerData.health : 100,
+      onLoad: this.onLoadCallback, // Pass the callback to the model
     });
 
     // Store the model instance

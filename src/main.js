@@ -64,37 +64,84 @@ const playerController = new PlayerController(
 // Initialize other players manager
 const otherPlayers = new OtherPlayers(scene);
 
-// Create dummy players
-const dummyPlayer = new DummyPlayer(scene, { x: 0, y: 0.8, z: -15 });
-const dummyPlayer2 = new DummyPlayer(scene, { x: 5, y: 0.8, z: -15 });
+// --- Define sync function FIRST ---
+function syncCollidableObjects() {
+  const gameMapObjects = gameMap.getCollidableObjects();
+  const otherPlayerMeshes = otherPlayers.getPlayerObjects();
+  const dummy1Meshes = dummyPlayer.getMeshes();
+  const dummy2Meshes = dummyPlayer2 ? dummyPlayer2.getMeshes() : [];
 
-// Initialize weapon system
+  console.log("Syncing Collidables:"); // Keep logs for now
+  console.log(`  GameMap: ${gameMapObjects.length} objects`);
+  console.log(
+    `  OtherPlayers: ${otherPlayerMeshes.length} meshes`,
+    otherPlayerMeshes.map((m) => ({
+      name: m.name,
+      uuid: m.uuid,
+      userData: JSON.stringify(m.userData),
+    }))
+  );
+  console.log(
+    `  Dummy1: ${dummy1Meshes.length} meshes`,
+    dummy1Meshes.map((m) => ({
+      name: m.name,
+      uuid: m.uuid,
+      userData: JSON.stringify(m.userData),
+    }))
+  );
+  console.log(
+    `  Dummy2: ${dummy2Meshes.length} meshes`,
+    dummy2Meshes.map((m) => ({
+      name: m.name,
+      uuid: m.uuid,
+      userData: JSON.stringify(m.userData),
+    }))
+  );
+
+  const allCollidables = [
+    ...gameMapObjects,
+    ...otherPlayerMeshes,
+    ...dummy1Meshes,
+    ...dummy2Meshes,
+  ];
+
+  console.log(`  Total Collidables: ${allCollidables.length}`);
+
+  playerController.setCollidableObjects(allCollidables);
+  // Ensure weaponSystem exists before setting collidables
+  if (weaponSystem) {
+    weaponSystem.setCollidableObjects(allCollidables);
+  }
+}
+// --- End Define sync function ---
+
+// Create dummy players, passing the sync function as callback
+const dummyPlayer = new DummyPlayer(
+  scene,
+  { x: 0, y: 0.8, z: -15 },
+  syncCollidableObjects
+);
+const dummyPlayer2 = new DummyPlayer(
+  scene,
+  { x: 5, y: 0.8, z: -15 },
+  syncCollidableObjects
+);
+
+// Initialize weapon system (AFTER defining syncCollidableObjects)
 const weaponSystem = new WeaponSystem(
   scene,
   scene.userData.camera,
-  gameMap.getCollidableObjects(),
+  [], // Start with empty list, sync will populate it
   networkManager,
   inputManager,
   uiManager,
-  dummyPlayer,
+  [dummyPlayer, dummyPlayer2],
   playerController.getFPGun(),
   playerController
 );
-weaponSystem.targets = gameMap.getTargets();
+weaponSystem.targets = gameMap.getTargets(); // Targets can be set separately
 
-// Sync function
-function syncCollidableObjects() {
-  const allCollidables = [
-    ...gameMap.getCollidableObjects(),
-    ...otherPlayers.getPlayerObjects(),
-    ...dummyPlayer.getMeshes(),
-    ...(dummyPlayer2 ? dummyPlayer2.getMeshes() : []),
-  ];
-
-  playerController.setCollidableObjects(allCollidables);
-  weaponSystem.setCollidableObjects(allCollidables);
-}
-syncCollidableObjects(); // Initial sync
+syncCollidableObjects(); // Initial sync (will likely only have map objects)
 
 // --- Networking Setup ---
 networkManager.setReferences(

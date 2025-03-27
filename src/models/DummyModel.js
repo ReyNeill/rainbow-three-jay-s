@@ -9,6 +9,7 @@ export class DummyModel extends PlayerModel {
       playerId: options.playerId || `dummy_${THREE.MathUtils.generateUUID()}`, // Unique ID for dummy
       playerHeight: 1.6, // Ensure height is consistent
       team: "yellow", // Explicitly set team for dummy
+      onLoad: options.onLoad, // Pass onLoad through
       ...options, // Allow overriding defaults
     };
     // Call the parent constructor (which now handles model loading)
@@ -21,93 +22,60 @@ export class DummyModel extends PlayerModel {
     // Calculate initial floor level based on spawn and player height from Config
     this.floorLevelY = position.y - (dummyOptions.playerHeight || 1.6) / 2;
     this.isOnGround = false;
+    this.isDead = false; // Add isDead flag
 
     // Add small text indicator above the health bar
     this.waitForLoadAndApplyGravity();
   }
 
-  addDummyLabel() {
-    // Ensure modelGroup exists before adding to it
-    if (!this.modelGroup) {
-      console.warn(
-        "Attempted to add dummy label before modelGroup was created."
-      );
-      return;
-    }
-    // Add a small "DUMMY" text above the health bar
-    const textGeometry = new THREE.PlaneGeometry(1.2, 0.3);
-    const canvas = document.createElement("canvas");
-    canvas.width = 128;
-    canvas.height = 32;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, 128, 32);
-    ctx.fillStyle = "white";
-    ctx.font = "bold 20px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("DUMMY", 64, 16);
+  // --- REMOVE Dummy Label Method --- {{ delete }}
+  // addDummyLabel() { ... }
+  // --- End REMOVE --- {{ delete }}
 
-    const textTexture = new THREE.CanvasTexture(canvas);
-    const textMaterial = new THREE.MeshBasicMaterial({
-      map: textTexture,
-      transparent: true,
-      side: THREE.DoubleSide,
-    });
-    this.textMesh = new THREE.Mesh(textGeometry, textMaterial);
-    // Position relative to the modelGroup origin (which is at the model's feet)
-    // Place it above the health bar's expected position
-    const healthBarY = (this.options.playerHeight || 1.6) + 0.3; // Approx Y of healthbar top
-    this.textMesh.position.set(0, healthBarY + 0.2, 0); // Place slightly above healthbar
-
-    // Billboard the text
-    this.textMesh.lookAt(this.scene.userData.camera.position); // Initial lookAt
-    // We might need to update this in an update loop if camera moves significantly relative to dummy
-
-    this.modelGroup.add(this.textMesh);
-  }
-
-  // Override getMeshes to include dummy text label if it exists
-  getMeshes() {
-    const baseMeshes = super.getMeshes();
-    return this.textMesh ? [...baseMeshes, this.textMesh] : baseMeshes;
-  }
-
-  // Handle being hit - returns true if player is still alive
-  hit(damage) {
-    // Use the parent hit method for health logic and basic feedback
-    const alive = super.hit(damage);
-
-    // Reset health after 2 seconds if it reaches zero (Dummy specific)
-    if (!alive) {
-      setTimeout(() => {
-        if (this.modelGroup?.parent) {
-          this.health = this.maxHealth;
-          this.updateHealthBar();
-          console.log(`Dummy ${this.options.playerId} respawned.`);
-        }
-      }, 2000);
-    }
-
-    return alive;
-  }
-
-  // --- New method to wait for load ---
   waitForLoadAndApplyGravity() {
+    // Check if model is loaded, wait if not
     const checkLoad = () => {
       if (this.isModelLoaded) {
-        // Model is ready, potentially adjust floor level based on loaded model bounds
-        if (this.loadedModelMesh) {
-          this.modelGroup.position.y = this.floorLevelY;
-        }
-        this.addDummyLabel();
-        this.applyGravity();
+        // --- REMOVE Label Call --- {{ delete }}
+        // this.addDummyLabel(); // Add label once model exists
+        // --- End REMOVE --- {{ delete }}
       } else {
-        // Wait and check again
-        setTimeout(checkLoad, 100);
+        setTimeout(checkLoad, 100); // Check again shortly
       }
     };
     checkLoad();
+  }
+
+  hit(damage) {
+    // If already dead (during respawn timer), ignore hits
+    if (this.isDead) return false;
+
+    // Use the parent hit method for health logic
+    const alive = super.hit(damage); // This decreases health
+
+    // If health dropped to 0 or below
+    if (!alive) {
+      console.log(`Dummy ${this.options.playerId} died.`);
+      this.isDead = true; // Set dead flag
+      this.modelGroup.visible = false; // Hide the model
+
+      // Respawn after 2 seconds
+      setTimeout(() => {
+        // Check if the model group still exists in the scene (safety check)
+        if (this.modelGroup?.parent) {
+          this.health = this.maxHealth; // Reset health
+          this.modelGroup.visible = true; // Show the model again
+          this.isDead = false; // Clear dead flag
+          console.log(`Dummy ${this.options.playerId} respawned.`);
+        } else {
+          console.log(
+            `Dummy ${this.options.playerId} could not respawn (removed from scene).`
+          );
+        }
+      }, 2000); // 2 second respawn timer
+    }
+
+    return alive; // Return true if health > 0 AFTER taking damage
   }
 
   applyGravity() {
@@ -163,12 +131,17 @@ export class DummyModel extends PlayerModel {
 
   // Override dispose to remove text mesh
   dispose() {
-    if (this.textMesh) {
-      this.textMesh.geometry?.dispose();
-      this.textMesh.material?.map?.dispose(); // Dispose canvas texture
-      this.textMesh.material?.dispose();
-      this.modelGroup?.remove(this.textMesh);
-    }
+    // --- REMOVE Health Bar Disposal --- {{ delete }}
+    // if (this.healthBarGroup) {
+    //   this.healthBarGroup.traverse((child) => {
+    //     if (child.isMesh) {
+    //       child.geometry?.dispose();
+    //       child.material?.dispose();
+    //     }
+    //   });
+    //   this.modelGroup?.remove(this.healthBarGroup);
+    // }
+    // --- End REMOVE --- {{ delete }}
     super.dispose(); // Call parent dispose
   }
 }

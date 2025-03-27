@@ -35,6 +35,12 @@ export class NetworkManager {
     this.otherPlayers = otherPlayers;
     this.uiManager = uiManager;
     this.syncCallback = syncCallback; // Store the sync function
+
+    // --- Set the callback in OtherPlayers ---
+    if (this.otherPlayers && this.syncCallback) {
+      this.otherPlayers.setOnLoadCallback(this.syncCallback);
+    }
+    // --- End Set Callback ---
   }
 
   setupEventListeners() {

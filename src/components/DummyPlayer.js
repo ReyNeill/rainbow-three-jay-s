@@ -2,7 +2,11 @@ import * as THREE from "three";
 import { DummyModel } from "../models/DummyModel";
 
 export class DummyPlayer {
-  constructor(scene, position = { x: 0, y: 0.8, z: -25 }) {
+  constructor(
+    scene,
+    position = { x: 0, y: 0.8, z: -25 },
+    onLoadCallback = null
+  ) {
     this.scene = scene;
 
     // Create position vector from input position
@@ -12,8 +16,10 @@ export class DummyPlayer {
       position.z
     );
 
-    // Create the dummy player using DummyModel
-    this.model = new DummyModel(scene, positionVector);
+    // Create the dummy player using DummyModel, passing the callback
+    this.model = new DummyModel(scene, positionVector, {
+      onLoad: onLoadCallback,
+    });
   }
 
   // Handle being hit - returns true if player is still alive
