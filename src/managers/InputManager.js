@@ -37,13 +37,14 @@ export class InputManager {
   }
 
   setupEventListeners() {
-    document.addEventListener("keydown", (event) => this.handleKeyDown(event));
-    document.addEventListener("keyup", (event) => this.handleKeyUp(event));
+    document.addEventListener("keydown", this.handleKeyDown.bind(this));
+    document.addEventListener("keyup", this.handleKeyUp.bind(this));
 
-    this.domElement.addEventListener("mousedown", (event) =>
-      this.handleMouseDown(event)
+    this.domElement.addEventListener(
+      "mousedown",
+      this.handleMouseDown.bind(this)
     );
-    document.addEventListener("mouseup", (event) => this.handleMouseUp(event)); // Listen on document for mouseup
+    this.domElement.addEventListener("mouseup", this.handleMouseUp.bind(this));
 
     document.addEventListener("mousemove", (event) =>
       this.handleMouseMove(event)
@@ -85,24 +86,33 @@ export class InputManager {
   }
 
   handleMouseDown(event) {
-    if (!this.isPointerLocked) return;
+    event.preventDefault();
     const action = this.mouseButtonToAction[event.button];
-    if (action && !this.mouseButtonStates[event.button]) {
-      this.mouseButtonStates[event.button] = true;
-      this.activeActions.add(action);
-      this.pressedActions.add(action);
-      // console.log(`Action pressed: ${action}`);
+    if (action) {
+      if (action === "aim") {
+        console.log(
+          `InputManager: MouseDown detected for action: ${action} (Button: ${event.button})`
+        );
+      }
+      if (!this.activeActions.has(action)) {
+        this.activeActions.add(action);
+        this.pressedActions.add(action);
+      }
     }
   }
 
   handleMouseUp(event) {
-    // No pointer lock check needed here, as mouseup can happen outside the element
     const action = this.mouseButtonToAction[event.button];
-    if (action && this.mouseButtonStates[event.button]) {
-      this.mouseButtonStates[event.button] = false;
-      this.activeActions.delete(action);
-      this.releasedActions.add(action);
-      // console.log(`Action released: ${action}`);
+    if (action) {
+      if (action === "aim") {
+        console.log(
+          `InputManager: MouseUp detected for action: ${action} (Button: ${event.button})`
+        );
+      }
+      if (this.activeActions.has(action)) {
+        this.activeActions.delete(action);
+        this.releasedActions.add(action);
+      }
     }
   }
 

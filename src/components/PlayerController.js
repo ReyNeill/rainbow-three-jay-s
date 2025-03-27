@@ -107,11 +107,10 @@ export class PlayerController {
     // --- Add First-Person Gun Model ---
     this.fpGun = new GunModel(this.scene);
     this.fpGunMesh = this.fpGun.getMesh();
-    // Use the hip position as the initial default
     this.fpGunMesh.position.copy(this.hipGunPosition);
-    this.fpGunMesh.rotation.y = 0; // Point straight forward
-    this.fpGunMesh.scale.set(0.8, 0.8, 0.8); // Adjust scale for first-person view
-    this.camera.add(this.fpGunMesh); // Add gun as child of camera
+    this.fpGunMesh.rotation.y = 0;
+    this.fpGunMesh.scale.set(0.8, 0.8, 0.8);
+    this.camera.add(this.fpGunMesh);
     // --- End First-Person Gun Model ---
 
     // Setup event listeners
@@ -414,14 +413,22 @@ export class PlayerController {
 
       // --- Update Camera Lean (Local Offset/Roll) ---
       // This runs regardless of vaulting, using the current leanAmount interpolated towards targetLeanAmount
-      this.updateLean(deltaTime);
+      this.updateLean(deltaTime); // Interpolates leanAmount and applies camera offset/roll
 
       // --- Update Weapon Bobbing ---
-      this.updateWeaponBob(deltaTime);
-      // --- End Weapon Bobbing ---
+      this.updateWeaponBob(deltaTime); // Applies bobbing + recoil kick offset to fpGunMesh.position
 
-      // Update recoil
+      // --- Update Recoil ---
       this.updateRecoil(deltaTime);
+
+      // --- Update reticle visibility based on aiming state ---
+      if (this.fpGun) {
+        // --- ADD LOG ---
+        // console.log(`Updating reticle visibility. isAiming: ${this.isAiming}`); // COMMENT OUT
+        // ---
+        this.fpGun.setReticleVisibility(this.isAiming);
+      }
+      // ---
     } else {
       // Not pointer locked
       this.velocity.set(0, 0, 0);
@@ -449,7 +456,31 @@ export class PlayerController {
         this.camera.updateProjectionMatrix();
       }
       this.uiManager.setCrosshairVisible(false); // Hide crosshair when not locked
+
+      // Also hide reticle if not locked
+      if (this.fpGun) {
+        // --- ADD LOG ---
+        // console.log("Pointer lock lost, hiding reticle."); // COMMENT OUT
+        // ---
+        this.fpGun.setReticleVisibility(false);
+      }
     }
+
+    this.controls.update(); // Update pointer lock controls if using custom update loop
+
+    // Update camera group position to match player's true position + offset
+    this.cameraGroup.position
+      .copy(this.truePosition)
+      .add(new THREE.Vector3(0, this.headHeightOffset, 0));
+
+    // --- Final Vaulting System UI Update ---
+    // (Keep this call if it exists and is correct - ensures UI prompt updates)
+    // Assuming this was the intended update call at the end
+    // if (this.vaultingSystem.update) { // Check if method exists before calling
+    //    this.vaultingSystem.update(deltaTime, this.truePosition, this.camera.quaternion, this.isOnGround);
+    // }
+    // OR maybe it was meant to be a specific UI update? Check VaultingSystem class.
+    // Let's comment this out for now as it caused the error. The core vault logic runs earlier.
   }
 
   getPosition() {
@@ -573,5 +604,63 @@ export class PlayerController {
     // Snap to zero if very close (optional)
     if (Math.abs(this.recoilPitchOffset) < 0.0001) this.recoilPitchOffset = 0;
     if (Math.abs(this.recoilKickOffset) < 0.0001) this.recoilKickOffset = 0;
+  }
+
+  // --- Aiming Update ---
+  updateAiming(deltaTime) {
+    // Determine target FOV
+    this.targetFOV = this.isAiming ? this.adsFOV : this.defaultFOV;
+
+    // Determine target gun position
+    this.targetGunPosition.copy(
+      this.isAiming ? this.adsGunPosition : this.hipGunPosition
+    );
+
+    // Smoothly interpolate FOV
+    const fovTransitionSpeed = Config.aiming.adsTransitionSpeed; // Use config value
+    this.camera.fov = THREE.MathUtils.lerp(
+      this.camera.fov,
+      this.targetFOV,
+      deltaTime * fovTransitionSpeed // Adjust speed as needed
+    );
+    this.camera.updateProjectionMatrix(); // Apply FOV changes
+  }
+
+  // --- Update method ---
+  updateLeaning(deltaTime) {
+    // Smoothly interpolate lean amount
+    this.leanAmount = THREE.MathUtils.lerp(
+      this.leanAmount,
+      this.targetLeanAmount,
+      deltaTime * 15 // Adjust speed as needed
+    );
+
+    // Apply lean offset and roll to the camera within the cameraGroup
+    const leanOffset = this.leanAmount * Config.leaning.amountMultiplier; // Use Config
+    const leanRoll = -this.leanAmount * Config.leaning.rollMultiplier; // Use Config
+
+    this.camera.position.x = leanOffset;
+    this.camera.rotation.z = leanRoll;
+
+    // Apply lean offset to the first-person gun (relative to camera)
+    if (this.fpGunMesh) {
+      // Calculate target X based on the CURRENT targetGunPosition (hip or ADS) + lean offset
+      const baseGunX = this.targetGunPosition.x; // Use the target (hip or ADS) as base
+      const targetGunX =
+        baseGunX - leanOffset * Config.leaning.gunOffsetMultiplier;
+
+      // Only lerp if not actively bobbing horizontally OR if aiming (ADS overrides bob horizontal offset slightly)
+      // Bobbing logic will handle lerping if moving from hip fire state
+      if (!this.isMovingHorizontally || !this.isOnGround || this.isAiming) {
+        // Lerp the X position separately if needed, bobbing handles Y/Z lerp
+        // Let updateWeaponBob handle the lerping entirely based on targetGunPosition
+        // this.fpGunMesh.position.x = THREE.MathUtils.lerp(
+        //   this.fpGunMesh.position.x,
+        //   targetGunX,
+        //   deltaTime * 10
+        // );
+      }
+      // Bobbing logic will handle lerping based on targetGunPosition
+    }
   }
 }

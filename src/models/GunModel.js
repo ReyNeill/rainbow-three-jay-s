@@ -13,6 +13,7 @@ export class GunModel {
 
     this.sightModelMesh = null;
     this.isSightLoaded = false;
+    this.reticleMesh = null; // Add property for reticle
 
     this.createModel();
   }
@@ -111,54 +112,56 @@ export class GunModel {
         this.sightModelMesh = gltf.scene;
         console.log("Loaded ACOG GLTF Scene:", this.sightModelMesh);
 
-        // Adjust internal object position (Keep this fix)
         const internalACOGObject = this.sightModelMesh.getObjectByName("ACOG");
         if (internalACOGObject) {
-          console.log(
-            "Found internal 'ACOG' object. Original Y:",
-            internalACOGObject.position.y
-          );
+          // Keep internal adjustments
           internalACOGObject.position.y = 0;
           internalACOGObject.position.x = 0;
-          console.log(
-            "Adjusted internal 'ACOG' object position:",
-            internalACOGObject.position.toArray()
-          );
+
+          // --- Create the reticle BUT DON'T ADD IT YET ---
+          this.createReticle(); // Don't pass parentObject
+          // ---
         } else {
           console.warn(
-            "Could not find internal object named 'ACOG' to adjust position."
+            "Could not find internal object named 'ACOG'. Reticle will be added to gunGroup."
           );
+          // --- Create the reticle if ACOG object not found ---
+          this.createReticle(); // Create it anyway
+          // ---
         }
 
-        // --- ADJUST THIS SCALE ---
-        // Decrease the scale factor
+        // --- ACOG Scale/Position/Rotation (Keep as is) ---
         const desiredSightScale = 0.021;
-        // --- END ADJUSTMENT ---
-
         this.sightModelMesh.scale.set(
           desiredSightScale,
           desiredSightScale,
           desiredSightScale
         );
-
-        // Position the root scene (Keep this)
-        this.sightModelMesh.position.set(0, 0.04, -0.05); // Keep Y=0.04 or adjust if needed
-
-        console.log(
-          "Set sight position (on scene group):",
-          this.sightModelMesh.position.toArray()
-        );
-        console.log(
-          // Log the scale too
-          "Set sight scale:",
-          this.sightModelMesh.scale.toArray()
-        );
-
+        this.sightModelMesh.position.set(0, 0.04, -0.05);
         this.sightModelMesh.rotation.y = Math.PI;
+        // ---
 
-        this.gunGroup.add(this.sightModelMesh);
+        this.gunGroup.add(this.sightModelMesh); // Add ACOG model
+
+        // --- ADJUST RETICLE POSITION RELATIVE TO gunGroup ---
+        if (this.reticleMesh) {
+          // Y: Vertically align with ACOG sight center (ACOG Y is 0.04)
+          // Z: Place inside the ACOG model (ACOG Z is -0.05)
+          this.reticleMesh.position.set(0, 0.1025, -0.05); // Was 0.045, try 0.05
+          // ---
+
+          console.log(
+            "Adding reticle directly to gunGroup at adjusted position:",
+            this.reticleMesh.position.toArray()
+          );
+          this.gunGroup.add(this.reticleMesh);
+        }
+        // ---
+
         this.isSightLoaded = true;
         console.log("ACOG sight model loaded and added to gun.");
+
+        this.setReticleVisibility(false); // Initially hide
       },
       undefined,
       (error) => {
@@ -166,6 +169,45 @@ export class GunModel {
       }
     );
   }
+
+  // --- Modified function to create the reticle ---
+  createReticle() {
+    // --- REDUCE SIZE ---
+    const arrowHeight = 0.005; // Back to a smaller value
+    // ---
+    const arrowWidth = arrowHeight * 0.6;
+
+    const shape = new THREE.Shape();
+    shape.moveTo(0, arrowHeight / 2);
+    shape.lineTo(-arrowWidth / 2, -arrowHeight / 2);
+    shape.lineTo(arrowWidth / 2, -arrowHeight / 2);
+    shape.lineTo(0, arrowHeight / 2);
+
+    const geometry = new THREE.ShapeGeometry(shape);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
+      side: THREE.DoubleSide,
+      depthTest: false,
+    });
+
+    this.reticleMesh = new THREE.Mesh(geometry, material);
+
+    console.log("Reticle mesh created (Smaller Size).");
+  }
+  // --- End modified function ---
+
+  // --- setReticleVisibility remains the same ---
+  setReticleVisibility(visible) {
+    if (this.reticleMesh) {
+      // console.log(`Setting reticle visibility to: ${visible}`); // Keep commented
+      this.reticleMesh.visible = visible;
+    } else {
+      console.log(
+        "Attempted to set reticle visibility, but mesh doesn't exist yet."
+      );
+    }
+  }
+  // ---
 
   // Get the main group containing the gun parts
   getMesh() {
@@ -181,9 +223,18 @@ export class GunModel {
 
   // Clean up resources
   dispose() {
+    if (this.reticleMesh) {
+      this.reticleMesh.geometry?.dispose();
+      this.reticleMesh.material?.dispose();
+      // Explicitly remove from gunGroup if it was added there
+      this.gunGroup?.remove(this.reticleMesh);
+    }
+    this.reticleMesh = null;
+
     if (this.sightModelMesh) {
       this.sightModelMesh.traverse((child) => {
-        if (child.isMesh) {
+        if (child.isMesh && child !== this.reticleMesh) {
+          // Don't re-dispose reticle
           child.geometry?.dispose();
           if (child.material) {
             if (Array.isArray(child.material)) {
@@ -201,22 +252,6 @@ export class GunModel {
       this.gunGroup?.remove(this.sightModelMesh);
       this.sightModelMesh = null;
     }
-
-    this.gunGroup.traverse((child) => {
-      if (child !== this.sightModelMesh && child.isMesh) {
-        child.geometry?.dispose();
-        if (child.material) {
-          if (
-            child.material.uuid ===
-            this.gunGroup.children.find((c) => c.isMesh)?.material.uuid
-          ) {
-            // Assuming the first mesh uses the bodyMaterial we created.
-            // This is brittle. Better: Store created materials explicitly.
-            // child.material.dispose(); // Be careful here
-          }
-        }
-      }
-    });
 
     const bodyMat = this.gunGroup.children.find(
       (c) => c.isMesh && c.material?.isMeshStandardMaterial
