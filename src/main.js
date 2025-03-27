@@ -11,9 +11,7 @@ import { NetworkManager } from "./managers/NetworkManager.js";
 // Initialize the scene
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb); // Sky blue background
-
-// Initialize the camera
-const camera = new THREE.PerspectiveCamera(
+scene.userData.camera = new THREE.PerspectiveCamera(
   60,
   window.innerWidth / window.innerHeight,
   0.1,
@@ -55,7 +53,7 @@ const networkManager = new NetworkManager();
 
 // Initialize player controller
 const playerController = new PlayerController(
-  camera,
+  scene.userData.camera,
   renderer.domElement,
   gameMap.getCollidableObjects(),
   inputManager,
@@ -75,7 +73,7 @@ const dummyPlayer2 = new DummyPlayer(scene, { x: 5, y: 0.8, z: -15 });
 // Pass the initial collidables from the player controller
 const weaponSystem = new WeaponSystem(
   scene,
-  camera,
+  scene.userData.camera,
   gameMap.getCollidableObjects(), // Pass collidables from map
   networkManager,
   inputManager,
@@ -124,8 +122,8 @@ window.addEventListener("resize", () => {
   const height = window.innerHeight;
 
   renderer.setSize(width, height);
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
+  scene.userData.camera.aspect = width / height;
+  scene.userData.camera.updateProjectionMatrix();
 });
 
 // Manage UI visibility based on pointer lock using UIManager
@@ -165,7 +163,7 @@ function animate(time) {
   weaponSystem.update();
 
   // Render the scene
-  renderer.render(scene, camera);
+  renderer.render(scene, scene.userData.camera);
 
   // Update Input Manager
   inputManager.update();

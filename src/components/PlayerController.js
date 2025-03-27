@@ -55,8 +55,8 @@ export class PlayerController {
     this.leanToggleState = false; // For toggle mode
 
     // --- Recoil State ---
-    this.recoilPitch = 0; // Current vertical recoil rotation
-    this.recoilKick = 0; // Current backward recoil displacement
+    this.recoilPitchOffset = 0; // Current vertical recoil rotation offset
+    this.recoilKickOffset = 0; // Current backward recoil displacement offset
 
     // Movement speed and physics
     this.velocity = new THREE.Vector3();
@@ -495,19 +495,27 @@ export class PlayerController {
       const horizontalBob =
         Math.cos(this.bobTimer * 0.5) * currentBobIntensity * 0.5;
 
-      // Apply bobbing relative to the base target position (which NO LONGER includes lean offset adjustment)
-      const finalTargetPos = baseTargetPos.clone(); // Start with base hip/ADS pos
+      // Apply bobbing relative to the base target position
+      const finalTargetPos = baseTargetPos.clone();
       finalTargetPos.y += verticalBob;
-      finalTargetPos.x += horizontalBob; // Add bob offset
+      finalTargetPos.x += horizontalBob;
 
-      // Smoothly interpolate towards the final target bob position
+      // Add the CURRENT recoil kick offset to the final target position
+      // Positive Z is towards camera in camera space
+      finalTargetPos.z += this.recoilKickOffset;
+
+      // Smoothly interpolate towards the final target position (including bob AND recoil kick)
       this.fpGunMesh.position.lerp(finalTargetPos, deltaTime * transitionSpeed);
     } else {
       // Player is not moving horizontally or is airborne
       this.bobTimer = 0; // Reset timer
 
-      // Smoothly return to the base target position (Hip or ADS, NO LONGER includes lean offset adjustment)
-      this.fpGunMesh.position.lerp(baseTargetPos, deltaTime * transitionSpeed);
+      // Also apply recoil kick when returning to base position
+      const finalTargetPos = baseTargetPos.clone();
+      finalTargetPos.z += this.recoilKickOffset;
+
+      // Smoothly return to the base target position (including recoil kick)
+      this.fpGunMesh.position.lerp(finalTargetPos, deltaTime * transitionSpeed);
     }
   }
   // --- End Weapon Bobbing Method ---
@@ -523,39 +531,47 @@ export class PlayerController {
       kick *= Config.recoil.adsMultiplier;
     }
 
-    // Add recoil impulse (will be recovered in updateRecoil)
-    this.recoilPitch += pitch;
-    this.recoilKick += kick;
+    // Apply the initial pitch kick directly to the camera
+    this.camera.rotation.x += pitch;
+
+    // Add recoil impulse to the current offsets so recovery knows the target
+    this.recoilPitchOffset += pitch;
+    this.recoilKickOffset += kick;
 
     // Optional: Clamp max recoil accumulation if needed
-    // this.recoilPitch = Math.min(this.recoilPitch, MAX_RECOIL_PITCH);
-    // this.recoilKick = Math.min(this.recoilKick, MAX_RECOIL_KICK);
+    // this.recoilPitchOffset = Math.min(this.recoilPitchOffset, MAX_RECOIL_PITCH);
+    // this.recoilKickOffset = Math.min(this.recoilKickOffset, MAX_RECOIL_KICK);
   }
 
   // --- Update Recoil Method ---
   updateRecoil(deltaTime) {
     const recoveryFactor = deltaTime * Config.recoil.recoverySpeed;
 
-    // Apply current recoil
-    // Pitch affects camera directly (additively)
-    this.camera.rotation.x += this.recoilPitch * recoveryFactor; // Apply a portion this frame
+    // Store the PREVIOUS frame's pitch offset before lerping
+    const prevPitchOffset = this.recoilPitchOffset;
 
-    // Kick affects gun position directly (additively)
-    // Note: Positive Z is towards camera, so add kick
-    if (this.fpGunMesh) {
-      this.fpGunMesh.position.z += this.recoilKick * recoveryFactor; // Apply a portion this frame
-    }
-
-    // Smoothly recover recoil towards zero
-    this.recoilPitch = THREE.MathUtils.lerp(
-      this.recoilPitch,
+    // Smoothly recover recoil offsets towards zero
+    this.recoilPitchOffset = THREE.MathUtils.lerp(
+      this.recoilPitchOffset,
       0,
       recoveryFactor
     );
-    this.recoilKick = THREE.MathUtils.lerp(this.recoilKick, 0, recoveryFactor);
+    this.recoilKickOffset = THREE.MathUtils.lerp(
+      this.recoilKickOffset,
+      0,
+      recoveryFactor
+    );
 
-    // Snap to zero if very close to avoid tiny lingering values
-    if (Math.abs(this.recoilPitch) < 0.0001) this.recoilPitch = 0;
-    if (Math.abs(this.recoilKick) < 0.0001) this.recoilKick = 0;
+    // Calculate the CHANGE in pitch offset this frame (will be negative during recovery)
+    const deltaPitch = this.recoilPitchOffset - prevPitchOffset;
+
+    // Apply the CHANGE in pitch to the camera (handles the recovery movement)
+    this.camera.rotation.x += deltaPitch; // This is correct for recovery
+
+    // Kick is handled in updateWeaponBob
+
+    // Snap to zero if very close (optional)
+    if (Math.abs(this.recoilPitchOffset) < 0.0001) this.recoilPitchOffset = 0;
+    if (Math.abs(this.recoilKickOffset) < 0.0001) this.recoilKickOffset = 0;
   }
 }
