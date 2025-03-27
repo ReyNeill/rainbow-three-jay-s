@@ -104,7 +104,7 @@ export class PlayerController {
     this.fpGunMesh = this.fpGun.getMesh();
     // Use the hip position as the initial default
     this.fpGunMesh.position.copy(this.hipGunPosition);
-    this.fpGunMesh.rotation.y = -Math.PI / 20; // Slight angle
+    this.fpGunMesh.rotation.y = 0; // Point straight forward
     this.fpGunMesh.scale.set(0.8, 0.8, 0.8); // Adjust scale for first-person view
     this.camera.add(this.fpGunMesh); // Add gun as child of camera
     // --- End First-Person Gun Model ---
