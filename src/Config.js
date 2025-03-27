@@ -43,7 +43,7 @@ export const Config = {
     adsFOV: 30, // Field of view when aiming
     // Target gun position relative to camera when aiming
     // Needs tuning: (X: 0 = center, Y: slightly down, Z: closer to camera)
-    adsGunPosition: [0, -0.1, -0.3],
+    adsGunPosition: [0, -0.05, -0.35],
     adsTransitionSpeed: 12.0, // Speed of FOV and gun position transition
     adsMoveSpeedMultiplier: 0.7, // Speed reduction while aiming (70% of normal)
     adsBobIntensityMultiplier: 0.3, // Bob reduction while aiming (30% of normal)
@@ -53,7 +53,7 @@ export const Config = {
   leaning: {
     amountMultiplier: 0.5, // How much the camera offsets horizontally
     rollMultiplier: Math.PI / 12, // How much the camera rolls
-    gunOffsetMultiplier: 0.5, // How much the gun offsets horizontally (relative to camera offset)
+    gunOffsetMultiplier: 1.0, // How much the gun offsets horizontally (relative to camera offset)
   },
 
   // Weapon Bobbing

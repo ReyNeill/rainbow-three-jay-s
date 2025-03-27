@@ -475,9 +475,8 @@ export class PlayerController {
     // We lerp towards this base position + bobbing offsets
     const baseTargetPos = this.targetGunPosition.clone();
 
-    // Apply lean offset to the base target X position
-    const leanOffset = this.leanAmount * Config.leaning.amountMultiplier;
-    baseTargetPos.x -= leanOffset * Config.leaning.gunOffsetMultiplier;
+    // Define the transition speed (use config value)
+    const transitionSpeed = Config.aiming.adsTransitionSpeed;
 
     if (this.isMovingHorizontally && this.isOnGround) {
       this.bobTimer +=
@@ -488,19 +487,19 @@ export class PlayerController {
       const horizontalBob =
         Math.cos(this.bobTimer * 0.5) * currentBobIntensity * 0.5;
 
-      // Apply bobbing relative to the base target position (which includes lean offset)
-      const finalTargetPos = baseTargetPos.clone(); // Start with lean-adjusted base
+      // Apply bobbing relative to the base target position (which NO LONGER includes lean offset adjustment)
+      const finalTargetPos = baseTargetPos.clone(); // Start with base hip/ADS pos
       finalTargetPos.y += verticalBob;
-      finalTargetPos.x += horizontalBob; // Add bob offset AFTER lean offset
+      finalTargetPos.x += horizontalBob; // Add bob offset
 
       // Smoothly interpolate towards the final target bob position
-      this.fpGunMesh.position.lerp(finalTargetPos, deltaTime * 10);
+      this.fpGunMesh.position.lerp(finalTargetPos, deltaTime * transitionSpeed);
     } else {
       // Player is not moving horizontally or is airborne
       this.bobTimer = 0; // Reset timer
 
-      // Smoothly return to the base target position (Hip or ADS, including lean offset)
-      this.fpGunMesh.position.lerp(baseTargetPos, deltaTime * 10);
+      // Smoothly return to the base target position (Hip or ADS, NO LONGER includes lean offset adjustment)
+      this.fpGunMesh.position.lerp(baseTargetPos, deltaTime * transitionSpeed);
     }
   }
   // --- End Weapon Bobbing Method ---
