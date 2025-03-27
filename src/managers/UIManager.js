@@ -99,18 +99,6 @@ export class UIManager {
 
   // --- Control Methods ---
 
-  setCrosshairVisible(visible) {
-    if (this.elements.crosshair) {
-      this.elements.crosshair.style.display = visible ? "block" : "none";
-    }
-  }
-
-  setVaultPromptVisible(visible) {
-    if (this.elements.vaultPrompt) {
-      this.elements.vaultPrompt.style.display = visible ? "block" : "none";
-    }
-  }
-
   // Shows a temporary hit marker
   showHitMarker(duration = 100) {
     const hitMarker = document.createElement("div");
@@ -159,9 +147,11 @@ export class UIManager {
   handlePointerLockChange(isLocked) {
     // Hide/show crosshair based on lock state
     // NOTE: PlayerController also updates crosshair based on aiming state
-    if (this.elements.crosshair) {
-      this.elements.crosshair.style.display = isLocked ? "block" : "none"; // Simplified logic here
-    }
+    // The old HTML crosshair element might still exist if createElements wasn't fully cleaned up,
+    // but we shouldn't rely on it. PlayerController handles the new crosshair visibility.
+    // if (this.elements.crosshair) {
+    //   this.elements.crosshair.style.display = isLocked ? "block" : "none"; // Remove or comment out
+    // }
 
     // Vault prompt visibility is managed by VaultingSystem and PlayerController now
     // We don't need to manage it directly on lock change here.
@@ -172,8 +162,9 @@ export class UIManager {
     }
 
     if (!isLocked) {
-      this.setVaultPromptVisible(false); // Hide vault prompt if lock is lost
-      this.setCrosshairVisible(false); // Explicitly hide crosshair when lock lost
+      // REMOVE the call to the non-existent vault prompt method
+      // this.hideVaultPrompt(); // REMOVE THIS LINE
+      // ... (comment about crosshair) ...
     }
   }
 

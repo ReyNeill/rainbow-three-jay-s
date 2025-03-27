@@ -172,16 +172,21 @@ export class GunModel {
 
   // --- Modified function to create the reticle ---
   createReticle() {
-    // --- REDUCE SIZE ---
-    const arrowHeight = 0.005; // Back to a smaller value
-    // ---
-    const arrowWidth = arrowHeight * 0.6;
+    const arrowHeight = 0.005; // Keep the adjusted size
+    const arrowWidth = arrowHeight * 0.6; // Width relative to height
 
+    // --- Define Chevron Shape ---
     const shape = new THREE.Shape();
-    shape.moveTo(0, arrowHeight / 2);
-    shape.lineTo(-arrowWidth / 2, -arrowHeight / 2);
-    shape.lineTo(arrowWidth / 2, -arrowHeight / 2);
-    shape.lineTo(0, arrowHeight / 2);
+    const midPointY = -arrowHeight / 4; // Point where the chevron sides meet (adjust if needed)
+
+    shape.moveTo(0, arrowHeight / 2); // Top point
+    shape.lineTo(arrowWidth / 2, midPointY); // Top-right point down to middle-right
+    shape.lineTo(arrowWidth / 2, -arrowHeight / 2); // Middle-right down to bottom-right
+    shape.lineTo(0, -arrowHeight / 4); // Bottom-right to bottom-center (inner point)
+    shape.lineTo(-arrowWidth / 2, -arrowHeight / 2); // Bottom-center to bottom-left
+    shape.lineTo(-arrowWidth / 2, midPointY); // Bottom-left up to middle-left
+    shape.lineTo(0, arrowHeight / 2); // Middle-left back to top point (close path)
+    // --- End Chevron Shape ---
 
     const geometry = new THREE.ShapeGeometry(shape);
     const material = new THREE.MeshBasicMaterial({
@@ -192,7 +197,7 @@ export class GunModel {
 
     this.reticleMesh = new THREE.Mesh(geometry, material);
 
-    console.log("Reticle mesh created (Smaller Size).");
+    console.log("Reticle mesh created (Chevron Shape).");
   }
   // --- End modified function ---
 

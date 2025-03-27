@@ -129,14 +129,15 @@ uiManager.setConnectCallback(networkManager.connect.bind(networkManager));
 // --- End Networking Setup ---
 
 // Handle window resize
-window.addEventListener("resize", () => {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
+window.addEventListener("resize", onWindowResize, false);
 
-  renderer.setSize(width, height);
-  scene.userData.camera.aspect = width / height;
+function onWindowResize() {
+  scene.userData.camera.aspect = window.innerWidth / window.innerHeight;
   scene.userData.camera.updateProjectionMatrix();
-});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  playerController.onWindowResize();
+}
 
 // Manage UI visibility based on pointer lock using UIManager
 document.addEventListener("pointerlockchange", () => {
@@ -155,7 +156,7 @@ function animate(time) {
   const deltaTime = (time - lastTime) / 1000 || 0;
   lastTime = time;
 
-  // Update player controller
+  // Update player controller (which now also updates input manager)
   playerController.update(deltaTime);
 
   // --- Update Player Models (Animations & Health Bars) ---
@@ -184,13 +185,10 @@ function animate(time) {
   gameMap.updateTargets(deltaTime);
 
   // Update weapon system
-  weaponSystem.update();
+  weaponSystem.update(); // Make sure this doesn't rely on InputManager state *before* PlayerController runs
 
   // Render the scene
   renderer.render(scene, scene.userData.camera);
-
-  // Update Input Manager
-  inputManager.update();
 }
 
 animate(0); // Start the loop

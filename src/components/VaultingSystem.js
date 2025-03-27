@@ -39,15 +39,15 @@ export class VaultingSystem {
   }
 
   showVaultPrompt() {
-    if (this.uiManager && !this._isPromptVisible) {
-      this.uiManager.setVaultPromptVisible(true);
+    if (this.uiManager?.elements?.vaultPrompt && !this._isPromptVisible) {
+      this.uiManager.elements.vaultPrompt.style.display = "block";
       this._isPromptVisible = true;
     }
   }
 
   hideVaultPrompt() {
-    if (this.uiManager && this._isPromptVisible) {
-      this.uiManager.setVaultPromptVisible(false);
+    if (this.uiManager?.elements?.vaultPrompt && this._isPromptVisible) {
+      this.uiManager.elements.vaultPrompt.style.display = "none";
       this._isPromptVisible = false;
     }
   }
@@ -195,6 +195,6 @@ export class VaultingSystem {
 
   // Call this when pointer lock is lost to clean up UI
   onPointerUnlock() {
-    this.hideVaultPrompt(); // This will set _isPromptVisible to false
+    this.hideVaultPrompt();
   }
 }

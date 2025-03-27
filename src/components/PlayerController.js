@@ -4,6 +4,7 @@ import { CollisionDetection } from "../utils/CollisionDetection.js";
 import { VaultingSystem } from "./VaultingSystem.js";
 import { GunModel } from "../models/GunModel.js";
 import { Config } from "../Config.js"; // Import Config
+import { Crosshair } from "./Crosshair.js"; // Import the new Crosshair
 
 export class PlayerController {
   constructor(
@@ -113,6 +114,16 @@ export class PlayerController {
     this.camera.add(this.fpGunMesh);
     // --- End First-Person Gun Model ---
 
+    // --- Initialize Crosshair ---
+    this.crosshair = new Crosshair(this.camera);
+    // ---
+
+    // --- Initial Setup ---
+    this.fpGunMesh.position.copy(this.hipGunPosition); // Start at hip
+    this.camera.fov = this.defaultFOV;
+    this.camera.updateProjectionMatrix();
+    this.crosshair.setVisible(!this.isAiming); // Show crosshair initially
+
     // Setup event listeners
     this.setupEventListeners();
 
@@ -120,6 +131,10 @@ export class PlayerController {
     this.cameraGroup.position
       .copy(this.truePosition)
       .add(new THREE.Vector3(0, this.headHeightOffset, 0));
+
+    // --- Add state to track previous pointer lock status ---
+    this.wasPointerLocked = this.inputManager.getIsPointerLocked();
+    // ---
   }
 
   setupEventListeners() {
@@ -183,11 +198,21 @@ export class PlayerController {
   }
 
   update(deltaTime) {
+    // --- Check for Pointer Lock Change ---
+    const isLocked = this.inputManager.getIsPointerLocked();
+    if (this.wasPointerLocked && !isLocked) {
+      // Pointer lock was just lost
+      this.vaultingSystem.onPointerUnlock(); // Tell VaultingSystem to hide prompt
+      // Any other state resets needed specifically on unlock can go here
+    }
+    this.wasPointerLocked = isLocked; // Update status for next frame
+    // --- End Check ---
+
     // Update cameraGroup position to follow player's eye level first
     // This needs to happen AFTER truePosition might be updated by vaulting
     // Moved this down slightly
 
-    if (this.inputManager.getIsPointerLocked()) {
+    if (isLocked) {
       // --- Handle Input ---
       const moveF = this.inputManager.isActionActive("moveForward");
       const moveB = this.inputManager.isActionActive("moveBackward");
@@ -263,8 +288,6 @@ export class PlayerController {
       this.targetGunPosition = this.isAiming
         ? this.adsGunPosition
         : this.hipGunPosition;
-      // Update UI crosshair visibility
-      this.uiManager.setCrosshairVisible(!this.isAiming);
       // --- End Aiming State ---
 
       // --- Interpolate FOV ---
@@ -412,23 +435,22 @@ export class PlayerController {
       this.cameraGroup.position.copy(eyePosition);
 
       // --- Update Camera Lean (Local Offset/Roll) ---
-      // This runs regardless of vaulting, using the current leanAmount interpolated towards targetLeanAmount
-      this.updateLean(deltaTime); // Interpolates leanAmount and applies camera offset/roll
+      this.updateLean(deltaTime); // Renamed from updateLeaning
 
       // --- Update Weapon Bobbing ---
-      this.updateWeaponBob(deltaTime); // Applies bobbing + recoil kick offset to fpGunMesh.position
+      this.updateWeaponBob(deltaTime);
 
       // --- Update Recoil ---
       this.updateRecoil(deltaTime);
 
-      // --- Update reticle visibility based on aiming state ---
+      // --- Update Crosshair ---
+      this.crosshair.update(deltaTime, this.isMovingHorizontally);
+
+      // --- Update reticle visibility ---
       if (this.fpGun) {
-        // --- ADD LOG ---
-        // console.log(`Updating reticle visibility. isAiming: ${this.isAiming}`); // COMMENT OUT
-        // ---
         this.fpGun.setReticleVisibility(this.isAiming);
       }
-      // ---
+      this.crosshair.setVisible(!this.isAiming);
     } else {
       // Not pointer locked
       this.velocity.set(0, 0, 0);
@@ -455,32 +477,25 @@ export class PlayerController {
         this.camera.fov = this.defaultFOV;
         this.camera.updateProjectionMatrix();
       }
-      this.uiManager.setCrosshairVisible(false); // Hide crosshair when not locked
-
-      // Also hide reticle if not locked
+      // Hide 3D reticle
       if (this.fpGun) {
-        // --- ADD LOG ---
-        // console.log("Pointer lock lost, hiding reticle."); // COMMENT OUT
-        // ---
         this.fpGun.setReticleVisibility(false);
       }
+      // Hide 2D crosshair
+      this.crosshair.setVisible(false); // Hide crosshair when not locked
     }
 
     this.controls.update(); // Update pointer lock controls if using custom update loop
 
     // Update camera group position to match player's true position + offset
-    this.cameraGroup.position
-      .copy(this.truePosition)
+    const finalEyePosition = this.truePosition
+      .clone()
       .add(new THREE.Vector3(0, this.headHeightOffset, 0));
+    this.cameraGroup.position.copy(finalEyePosition);
 
-    // --- Final Vaulting System UI Update ---
-    // (Keep this call if it exists and is correct - ensures UI prompt updates)
-    // Assuming this was the intended update call at the end
-    // if (this.vaultingSystem.update) { // Check if method exists before calling
-    //    this.vaultingSystem.update(deltaTime, this.truePosition, this.camera.quaternion, this.isOnGround);
-    // }
-    // OR maybe it was meant to be a specific UI update? Check VaultingSystem class.
-    // Let's comment this out for now as it caused the error. The core vault logic runs earlier.
+    // --- Input Manager Update ---
+    // Moved from main loop to ensure it happens after all input checks in PlayerController
+    this.inputManager.update();
   }
 
   getPosition() {
@@ -617,17 +632,21 @@ export class PlayerController {
     );
 
     // Smoothly interpolate FOV
-    const fovTransitionSpeed = Config.aiming.adsTransitionSpeed; // Use config value
+    const fovTransitionSpeed = Config.aiming.adsTransitionSpeed;
     this.camera.fov = THREE.MathUtils.lerp(
       this.camera.fov,
       this.targetFOV,
-      deltaTime * fovTransitionSpeed // Adjust speed as needed
+      deltaTime * fovTransitionSpeed
     );
-    this.camera.updateProjectionMatrix(); // Apply FOV changes
+    this.camera.updateProjectionMatrix();
+
+    // Visibility is handled in the main update loop now
+    // No need to set visibility here directly
   }
 
-  // --- Update method ---
-  updateLeaning(deltaTime) {
+  // --- Rename updateLeaning to updateLean ---
+  updateLean(deltaTime) {
+    // RENAME METHOD
     // Smoothly interpolate lean amount
     this.leanAmount = THREE.MathUtils.lerp(
       this.leanAmount,
@@ -663,4 +682,14 @@ export class PlayerController {
       // Bobbing logic will handle lerping based on targetGunPosition
     }
   }
+
+  // --- Add window resize handler ---
+  onWindowResize() {
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    if (this.crosshair) {
+      this.crosshair.onWindowResize(); // Update crosshair aspect
+    }
+  }
+  // ---
 }
