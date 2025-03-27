@@ -68,26 +68,21 @@ const otherPlayers = new OtherPlayers(scene);
 const dummyPlayer = new DummyPlayer(scene, { x: 0, y: 0.8, z: -15 });
 const dummyPlayer2 = new DummyPlayer(scene, { x: 5, y: 0.8, z: -15 });
 
-// --- Initialize Weapon System EARLIER ---
-// Initialize weapon system - Pass NetworkManager instead of socket
-// Pass the initial collidables from the player controller
+// Initialize weapon system
 const weaponSystem = new WeaponSystem(
   scene,
   scene.userData.camera,
-  gameMap.getCollidableObjects(), // Pass collidables from map
+  gameMap.getCollidableObjects(),
   networkManager,
   inputManager,
   uiManager,
-  dummyPlayer, // Pass dummy player
-  playerController.getFPGun(), // Pass first-person gun model reference
-  playerController // Pass playerController instance
+  dummyPlayer,
+  playerController.getFPGun(),
+  playerController
 );
-
-// Pass the target instances to weapon system (can happen after initialization)
 weaponSystem.targets = gameMap.getTargets();
-// --- End Weapon System Initialization ---
 
-// Sync function to update collidable objects for relevant systems
+// Sync function
 function syncCollidableObjects() {
   const allCollidables = [
     ...gameMap.getCollidableObjects(),
@@ -97,23 +92,22 @@ function syncCollidableObjects() {
   ];
 
   playerController.setCollidableObjects(allCollidables);
-  // Update WeaponSystem collidables - Now weaponSystem is guaranteed to exist
   weaponSystem.setCollidableObjects(allCollidables);
 }
-
-// Initial sync AFTER weapon system is created
-syncCollidableObjects();
+syncCollidableObjects(); // Initial sync
 
 // --- Networking Setup ---
-// Set references needed by NetworkManager
 networkManager.setReferences(
   playerController,
   otherPlayers,
   uiManager,
   syncCollidableObjects
 );
-// Connect to the server
-networkManager.connect();
+
+// --- Set Connect Callback in UIManager ---
+// Provide the function to call when the connect button is clicked
+uiManager.setConnectCallback(networkManager.connect.bind(networkManager));
+
 // --- End Networking Setup ---
 
 // Handle window resize

@@ -7,10 +7,25 @@ export class NetworkManager {
     this.otherPlayers = null;
     this.uiManager = null;
     this.syncCallback = null; // Callback to sync collidables after updates
+    this.updateInterval = null;
+    this.isConnected = false; // Track connection state
   }
 
   connect() {
-    this.socket = io();
+    if (this.socket && this.socket.connected) {
+      console.log("Already connected.");
+      return;
+    }
+    if (this.socket && this.socket.connecting) {
+      console.log("Connection attempt already in progress.");
+      return;
+    }
+
+    console.log("Attempting to connect to server...");
+    const serverURL = `http://${window.location.hostname}:3000`;
+
+    this.socket = io(serverURL, {});
+
     this.setupEventListeners();
   }
 
@@ -27,6 +42,10 @@ export class NetworkManager {
 
     this.socket.on("connect", () => {
       console.log("Connected to server with ID:", this.socket.id);
+      this.isConnected = true;
+      if (this.uiManager) {
+        this.uiManager.updateConnectButtonState(true);
+      }
       // Start sending player updates periodically
       this.startPlayerUpdateInterval();
     });
@@ -110,9 +129,26 @@ export class NetworkManager {
 
     this.socket.on("disconnect", () => {
       console.log("Disconnected from server.");
-      // Handle disconnection, maybe show UI message
-      if (this.uiManager) this.uiManager.showNotification("Disconnected", 3000);
+      this.isConnected = false;
+      if (this.uiManager) {
+        this.uiManager.showNotification("Disconnected", 3000);
+        this.uiManager.updateConnectButtonState(false);
+      }
       if (this.otherPlayers) this.otherPlayers.clear(); // Clear other players on disconnect
+      this.stopPlayerUpdateInterval();
+    });
+
+    this.socket.on("connect_error", (error) => {
+      console.error("Connection Error:", error);
+      this.isConnected = false;
+      if (this.uiManager) {
+        this.uiManager.showNotification(
+          `Connection Failed: ${error.message}`,
+          5000
+        );
+        this.uiManager.updateConnectButtonState(false);
+      }
+      this.stopPlayerUpdateInterval();
     });
   }
 
@@ -154,6 +190,13 @@ export class NetworkManager {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
+    }
+  }
+
+  stopPlayerUpdateInterval() {
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
     }
   }
 }

@@ -3,6 +3,23 @@ export class UIManager {
     this.elements = {};
     this.createElements();
     this.notificationTimeout = null; // For hiding notifications
+
+    // Existing elements
+    this.crosshair = document.getElementById("crosshair");
+    this.vaultPrompt = document.getElementById("vault-prompt");
+    this.hitMarker = document.getElementById("hit-marker");
+    this.notification = document.getElementById("notification");
+    this.leanModeDisplay = document.getElementById("lean-mode-display");
+    this.hitOverlay = document.getElementById("hit-overlay");
+
+    // --- Pause Menu Elements ---
+    this.pauseMenuElement = null;
+    this.connectButtonElement = null;
+    this.connectCallback = null; // Function to call when connect is clicked
+    this.createPauseMenu(); // Create the menu elements
+
+    // Initial state setup (ensure pause menu is hidden initially)
+    this.handlePointerLockChange(false);
   }
 
   createElements() {
@@ -193,6 +210,22 @@ export class UIManager {
   // --- Event Handlers ---
 
   handlePointerLockChange(isLocked) {
+    // Hide/show crosshair and vault prompt based on lock state
+    if (this.crosshair) {
+      // Show crosshair only if locked AND not aiming
+      // (Aiming state logic is handled in PlayerController update)
+      // Here, just ensure it's hidden if unlocked
+      this.crosshair.style.display = isLocked ? "block" : "none";
+    }
+    if (this.vaultPrompt) {
+      this.vaultPrompt.style.display = "none"; // Vault prompt managed elsewhere
+    }
+
+    // --- Show/Hide Pause Menu ---
+    if (this.pauseMenuElement) {
+      this.pauseMenuElement.style.display = isLocked ? "none" : "block";
+    }
+
     // Instructions are handled separately now
     // this.setCrosshairVisible(isLocked); // PlayerController handles this based on aiming
     this.setInstructionsVisible(!isLocked);
@@ -221,4 +254,72 @@ export class UIManager {
     }
   }
   // --- End Notification Method ---
+
+  // --- Create Pause Menu Method ---
+  createPauseMenu() {
+    // Create the main div
+    this.pauseMenuElement = document.createElement("div");
+    this.pauseMenuElement.id = "pause-menu";
+    this.pauseMenuElement.style.position = "absolute";
+    this.pauseMenuElement.style.top = "50%";
+    this.pauseMenuElement.style.left = "50%";
+    this.pauseMenuElement.style.transform = "translate(-50%, -50%)";
+    this.pauseMenuElement.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+    this.pauseMenuElement.style.color = "white";
+    this.pauseMenuElement.style.padding = "20px";
+    this.pauseMenuElement.style.border = "1px solid white";
+    this.pauseMenuElement.style.borderRadius = "5px";
+    this.pauseMenuElement.style.textAlign = "center";
+    this.pauseMenuElement.style.display = "none"; // Initially hidden
+    this.pauseMenuElement.style.zIndex = "100"; // Ensure it's on top
+
+    // Create title
+    const title = document.createElement("h2");
+    title.textContent = "Paused";
+    this.pauseMenuElement.appendChild(title);
+
+    // Create Connect Button
+    this.connectButtonElement = document.createElement("button");
+    this.connectButtonElement.id = "connect-button";
+    this.connectButtonElement.textContent = "Connect";
+    this.connectButtonElement.style.padding = "10px 15px";
+    this.connectButtonElement.style.marginTop = "15px";
+    this.connectButtonElement.style.cursor = "pointer";
+    this.pauseMenuElement.appendChild(this.connectButtonElement);
+
+    // Add button click listener
+    this.connectButtonElement.addEventListener("click", () => {
+      if (this.connectCallback) {
+        this.connectCallback(); // Call the function provided by main.js
+        // Update button state visually
+        this.connectButtonElement.disabled = true;
+        this.connectButtonElement.textContent = "Connecting...";
+      }
+    });
+
+    // Append the menu to the body
+    document.body.appendChild(this.pauseMenuElement);
+  }
+  // --- End Create Pause Menu Method ---
+
+  // --- Method to set the connect callback ---
+  setConnectCallback(callback) {
+    this.connectCallback = callback;
+  }
+  // --- End Method ---
+
+  // --- Method to update connect button state based on network status ---
+  updateConnectButtonState(isConnected) {
+    if (!this.connectButtonElement) return;
+
+    if (isConnected) {
+      this.connectButtonElement.textContent = "Connected";
+      this.connectButtonElement.disabled = true;
+    } else {
+      // Reset if disconnected
+      this.connectButtonElement.textContent = "Connect";
+      this.connectButtonElement.disabled = false;
+    }
+  }
+  // --- End Method ---
 }
