@@ -67,7 +67,7 @@ export const Config = {
   // Weapon Recoil
   recoil: {
     pitchAmount: 0.02, // Radians the camera pitches up per shot
-    kickAmount: 0.03, // Units the gun kicks back per shot
+    kickAmount: 0.04, // Units the gun kicks back per shot
     recoverySpeed: 3.5, // Speed at which recoil recovers (Try a lower value like 5.0, adjust as needed)
     adsMultiplier: 0.4, // Recoil multiplier when aiming (40% of normal)
   },
