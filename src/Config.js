@@ -43,7 +43,7 @@ export const Config = {
     adsFOV: 30, // Field of view when aiming
     // Target gun position relative to camera when aiming
     // Needs tuning: (X: 0 = center, Y: slightly down, Z: closer to camera)
-    adsGunPosition: [0, -0.05, -0.35],
+    adsGunPosition: [0, -0.085, -0.35],
     adsTransitionSpeed: 12.0, // Speed of FOV and gun position transition
     adsMoveSpeedMultiplier: 0.7, // Speed reduction while aiming (70% of normal)
     adsBobIntensityMultiplier: 0.3, // Bob reduction while aiming (30% of normal)

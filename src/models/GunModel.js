@@ -17,16 +17,21 @@ export class GunModel {
 
     const bodyMaterial = new THREE.MeshStandardMaterial({
       color: this.options.color,
-      roughness: 0.5,
-      metalness: 0.6,
+      roughness: 0.6,
+      metalness: 0.3,
     });
     const sightMaterial = new THREE.MeshStandardMaterial({
       color: this.options.sightColor,
       roughness: 0.4,
-      metalness: 0.7,
+      metalness: 0.1,
     });
-    const lensMaterial = new THREE.MeshBasicMaterial({
-      color: 0x111111, // Dark grey/black
+    const lensMaterial = new THREE.MeshStandardMaterial({
+      color: this.options.lensColor,
+      roughness: 0.1,
+      metalness: 0.0,
+      transparent: true,
+      opacity: 0.15,
+      side: THREE.DoubleSide,
     });
 
     // --- Rifle Components ---
@@ -100,7 +105,9 @@ export class GunModel {
       scopeBodyRadius,
       scopeBodyRadius,
       scopeBodyLength,
-      16
+      16,
+      1,
+      true
     );
     const scopeBody = new THREE.Mesh(scopeBodyGeo, sightMaterial);
     scopeBody.rotation.x = Math.PI / 2; // Align with Z axis
@@ -115,14 +122,19 @@ export class GunModel {
     // Front Lens Placeholder
     const lensGeo = new THREE.CircleGeometry(scopeBodyRadius * 0.9, 16);
     const frontLens = new THREE.Mesh(lensGeo, lensMaterial);
-    frontLens.position.z = -scopeBodyLength / 2 - 0.001; // Slightly in front
-    scopeBody.add(frontLens); // Add to scope body
+    frontLens.position.z = -scopeBodyLength / 2 - 0.001; // Position relative to sightGroup origin
+    frontLens.castShadow = false;
+    frontLens.receiveShadow = false;
+    frontLens.renderOrder = -1;
+    sightGroup.add(frontLens);
 
     // Rear Lens Placeholder
     const rearLens = new THREE.Mesh(lensGeo, lensMaterial);
-    rearLens.position.z = scopeBodyLength / 2 + 0.001; // Slightly behind
-    rearLens.rotation.y = Math.PI; // Face backwards
-    scopeBody.add(rearLens); // Add to scope body
+    rearLens.position.z = scopeBodyLength / 2 + 0.001; // Position relative to sightGroup origin
+    rearLens.castShadow = false;
+    rearLens.receiveShadow = false;
+    rearLens.renderOrder = -1;
+    sightGroup.add(rearLens);
 
     // Position the sight group on top of the receiver
     sightGroup.position.set(0, 0.1 / 2 + scopeBodyRadius + 0.015, -0.05); // Y: receiver_half_height + mount_half_height + scope_radius
