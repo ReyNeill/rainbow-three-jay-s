@@ -24,6 +24,7 @@ export class GunModel {
       color: this.options.sightColor,
       roughness: 0.4,
       metalness: 0.1,
+      side: THREE.DoubleSide,
     });
     const lensMaterial = new THREE.MeshStandardMaterial({
       color: this.options.lensColor,
@@ -125,7 +126,6 @@ export class GunModel {
     frontLens.position.z = -scopeBodyLength / 2 - 0.001; // Position relative to sightGroup origin
     frontLens.castShadow = false;
     frontLens.receiveShadow = false;
-    frontLens.renderOrder = -1;
     sightGroup.add(frontLens);
 
     // Rear Lens Placeholder
@@ -133,7 +133,6 @@ export class GunModel {
     rearLens.position.z = scopeBodyLength / 2 + 0.001; // Position relative to sightGroup origin
     rearLens.castShadow = false;
     rearLens.receiveShadow = false;
-    rearLens.renderOrder = -1;
     sightGroup.add(rearLens);
 
     // Position the sight group on top of the receiver
