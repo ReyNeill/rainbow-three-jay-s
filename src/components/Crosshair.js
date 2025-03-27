@@ -9,112 +9,136 @@ export class Crosshair {
     this.canvas.height = this.size;
     this.ctx = this.canvas.getContext("2d");
 
-    // Crosshair properties
-    this.lineLength = 15;
-    this.lineWidth = 2;
-    this.gap = 8; // Initial gap
+    // --- Modified Crosshair properties ---
+    this.lineLength = 8; // Can be separated later if needed (lineLengthX/Y)
+    this.lineWidth = 2.5; // Can be separated later if needed (lineWidthX/Y)
     this.color = "white";
-    this.maxSpread = 20; // Max gap when moving
+
+    // Resting gaps
+    this.gapX = 35; // Horizontal gap when stationary
+    this.gapY = 25; // Vertical gap when stationary
+
+    // Spread gaps (when moving) - Ensure these are >= respective resting gaps
+    this.maxSpreadX = 85; // Max horizontal gap when moving
+    this.maxSpreadY = 75; // Max vertical gap when moving (Example: slightly more vertical spread)
+
     this.spreadSpeed = 5; // How fast it spreads/contracts
+
+    // Internal state for current interpolated gaps
+    this.currentGapX = this.gapX;
+    this.currentGapY = this.gapY;
+    // --- End Modified Properties ---
 
     this.texture = new THREE.CanvasTexture(this.canvas);
     const material = new THREE.SpriteMaterial({
       map: this.texture,
       transparent: true,
-      depthTest: false, // Render on top
+      depthTest: false,
       depthWrite: false,
-      renderOrder: 999, // Ensure it renders above everything else
+      renderOrder: 999,
     });
 
     this.sprite = new THREE.Sprite(material);
-    // Scale the sprite. Adjust as needed for desired on-screen size.
     const aspect = window.innerWidth / window.innerHeight;
-    this.sprite.scale.set(0.1, 0.1 * aspect, 0.1); // Adjust scale as needed
+    this.sprite.scale.set(0.1, 0.1 * aspect, 0.1);
+    this.sprite.position.set(0, 0, -1);
 
-    // Position relative to camera (will be added as child)
-    this.sprite.position.set(0, 0, -1); // Position in front of camera
-
-    this.isVisible = false; // Initially hidden
+    this.isVisible = false;
     this.sprite.visible = this.isVisible;
 
-    this.drawCrosshair(this.gap); // Initial draw
+    // Initial draw using separate gaps
+    this.drawCrosshair(this.currentGapX, this.currentGapY);
 
-    // Add the sprite to the camera
     this.camera.add(this.sprite);
   }
 
-  drawCrosshair(currentGap) {
+  // --- Modified drawCrosshair ---
+  drawCrosshair(currentGapX, currentGapY) {
     this.ctx.clearRect(0, 0, this.size, this.size);
     this.ctx.strokeStyle = this.color;
     this.ctx.lineWidth = this.lineWidth;
 
     const center = this.size / 2;
-    const halfGap = currentGap / 2;
-    const lineEnd = halfGap + this.lineLength;
 
+    // Vertical Lines (use gapY)
+    const halfGapY = currentGapY / 2;
+    const lineEndY = halfGapY + this.lineLength;
     // Top line
     this.ctx.beginPath();
-    this.ctx.moveTo(center, center - halfGap);
-    this.ctx.lineTo(center, center - lineEnd);
+    this.ctx.moveTo(center, center - halfGapY);
+    this.ctx.lineTo(center, center - lineEndY);
     this.ctx.stroke();
-
     // Bottom line
     this.ctx.beginPath();
-    this.ctx.moveTo(center, center + halfGap);
-    this.ctx.lineTo(center, center + lineEnd);
+    this.ctx.moveTo(center, center + halfGapY);
+    this.ctx.lineTo(center, center + lineEndY);
     this.ctx.stroke();
 
+    // Horizontal Lines (use gapX)
+    const halfGapX = currentGapX / 2;
+    const lineEndX = halfGapX + this.lineLength;
     // Left line
     this.ctx.beginPath();
-    this.ctx.moveTo(center - halfGap, center);
-    this.ctx.lineTo(center - lineEnd, center);
+    this.ctx.moveTo(center - halfGapX, center);
+    this.ctx.lineTo(center - lineEndX, center);
     this.ctx.stroke();
-
     // Right line
     this.ctx.beginPath();
-    this.ctx.moveTo(center + halfGap, center);
-    this.ctx.lineTo(center + lineEnd, center);
+    this.ctx.moveTo(center + halfGapX, center);
+    this.ctx.lineTo(center + lineEndX, center);
     this.ctx.stroke();
 
-    this.texture.needsUpdate = true; // IMPORTANT: Update the texture
+    this.texture.needsUpdate = true;
   }
+  // --- End Modified drawCrosshair ---
 
+  // --- Modified update ---
   update(deltaTime, isMoving) {
     if (!this.isVisible) return;
 
-    const targetGap = isMoving ? this.maxSpread : this.gap;
-    const currentGap = parseFloat(this.ctx.lineDashOffset); // Using dash offset to store current gap state hackily, let's refine this.
-    // A better way: store currentGap as a class property
-    // Let's assume we have this.currentGap property initialized to this.gap
+    // Determine target gaps based on movement
+    const targetGapX = isMoving ? this.maxSpreadX : this.gapX;
+    const targetGapY = isMoving ? this.maxSpreadY : this.gapY;
 
-    // Let's properly store and lerp the gap
-    if (!this.hasOwnProperty("currentGap")) {
-      this.currentGap = this.gap; // Initialize if not present
-    }
-
-    this.currentGap = THREE.MathUtils.lerp(
-      this.currentGap,
-      targetGap,
+    // Lerp horizontal gap
+    this.currentGapX = THREE.MathUtils.lerp(
+      this.currentGapX,
+      targetGapX,
       deltaTime * this.spreadSpeed
     );
 
-    // Avoid unnecessary redraws if the gap hasn't changed significantly
-    if (Math.abs(this.currentGap - targetGap) > 0.1 || isMoving) {
-      this.drawCrosshair(this.currentGap);
+    // Lerp vertical gap
+    this.currentGapY = THREE.MathUtils.lerp(
+      this.currentGapY,
+      targetGapY,
+      deltaTime * this.spreadSpeed
+    );
+
+    // Avoid unnecessary redraws if gaps haven't changed significantly
+    // Check both gaps now
+    const changedX = Math.abs(this.currentGapX - targetGapX) > 0.1;
+    const changedY = Math.abs(this.currentGapY - targetGapY) > 0.1;
+
+    if (changedX || changedY || isMoving) {
+      this.drawCrosshair(this.currentGapX, this.currentGapY);
     }
   }
+  // --- End Modified update ---
 
+  // --- Modified setVisible ---
   setVisible(visible) {
     if (this.isVisible !== visible) {
       this.isVisible = visible;
       this.sprite.visible = visible;
       if (visible) {
-        // Reset gap when becoming visible if needed
-        this.currentGap = this.gap;
-        this.drawCrosshair(this.currentGap);
+        // Reset gaps when becoming visible
+        this.currentGapX = this.gapX;
+        this.currentGapY = this.gapY;
+        this.drawCrosshair(this.currentGapX, this.currentGapY);
       }
     }
   }
+  // --- End Modified setVisible ---
 
   // Call this if the window is resized
   onWindowResize() {
@@ -129,6 +153,5 @@ export class Crosshair {
     }
     this.sprite.material.map.dispose();
     this.sprite.material.dispose();
-    // No geometry to dispose for Sprite
   }
 }
