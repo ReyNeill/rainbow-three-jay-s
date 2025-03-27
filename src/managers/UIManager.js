@@ -79,45 +79,6 @@ export class UIManager {
       document.head.appendChild(style);
     }
 
-    // Instructions (Copied from PlayerController)
-    this.elements.instructions = document.createElement("div");
-    this.elements.instructions.id = "instructions"; // Use existing ID if needed
-    this.elements.instructions.style.position = "absolute";
-    this.elements.instructions.style.top = "50%";
-    this.elements.instructions.style.left = "50%";
-    this.elements.instructions.style.transform = "translate(-50%, -50%)";
-    this.elements.instructions.style.textAlign = "center";
-    this.elements.instructions.style.color = "white";
-    this.elements.instructions.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
-    this.elements.instructions.style.padding = "1em";
-    this.elements.instructions.style.borderRadius = "5px";
-    this.elements.instructions.innerHTML = `Click to Play<br>(W, A, S, D = Move, Q/E = Lean, SPACE = Vault, MOUSE = Look, CLICK = Shoot)`;
-    document.body.appendChild(this.elements.instructions);
-
-    // Testing Instructions (Copied from main.js)
-    this.elements.testingInstructions = document.createElement("div");
-    this.elements.testingInstructions.style.position = "absolute";
-    this.elements.testingInstructions.style.top = "20px";
-    this.elements.testingInstructions.style.left = "20px";
-    this.elements.testingInstructions.style.color = "white";
-    this.elements.testingInstructions.style.backgroundColor =
-      "rgba(0, 0, 0, 0.7)";
-    this.elements.testingInstructions.style.padding = "10px";
-    this.elements.testingInstructions.style.borderRadius = "5px";
-    this.elements.testingInstructions.style.fontWeight = "bold";
-    this.elements.testingInstructions.style.fontSize = "16px";
-    this.elements.testingInstructions.style.zIndex = "1000";
-    this.elements.testingInstructions.innerHTML = `
-          <h3 style="color: #ff9900; margin: 0 0 10px 0;">Shooting Test Arena</h3>
-          <p>- Look for the <span style="color: yellow;">YELLOW</span> dummy players</p>
-          <p>- Try to hit the <span style="color: red;">RED</span> moving targets - they respawn after 5 seconds</p>
-          <p>- Click to lock pointer and enable shooting</p>
-          <p>- WASD to move, Space to vault over obstacles</p>
-          <p>- Q/E to lean left/right</p>
-          <p>- Left-click to shoot targets and dummies</p>
-        `;
-    document.body.appendChild(this.elements.testingInstructions);
-
     // --- Notification Area ---
     this.elements.notificationArea = document.createElement("div");
     this.elements.notificationArea.style.position = "absolute";
@@ -147,20 +108,6 @@ export class UIManager {
   setVaultPromptVisible(visible) {
     if (this.elements.vaultPrompt) {
       this.elements.vaultPrompt.style.display = visible ? "block" : "none";
-    }
-  }
-
-  setInstructionsVisible(visible) {
-    if (this.elements.instructions) {
-      this.elements.instructions.style.display = visible ? "block" : "none";
-    }
-  }
-
-  setTestingInstructionsVisible(visible) {
-    if (this.elements.testingInstructions) {
-      this.elements.testingInstructions.style.display = visible
-        ? "block"
-        : "none";
     }
   }
 
@@ -210,25 +157,20 @@ export class UIManager {
   // --- Event Handlers ---
 
   handlePointerLockChange(isLocked) {
-    // Hide/show crosshair and vault prompt based on lock state
-    if (this.crosshair) {
-      // Show crosshair only if locked AND not aiming
-      // (Aiming state logic is handled in PlayerController update)
-      // Here, just ensure it's hidden if unlocked
-      this.crosshair.style.display = isLocked ? "block" : "none";
+    // Hide/show crosshair based on lock state
+    // NOTE: PlayerController also updates crosshair based on aiming state
+    if (this.elements.crosshair) {
+      this.elements.crosshair.style.display = isLocked ? "block" : "none"; // Simplified logic here
     }
-    if (this.vaultPrompt) {
-      this.vaultPrompt.style.display = "none"; // Vault prompt managed elsewhere
-    }
+
+    // Vault prompt visibility is managed by VaultingSystem and PlayerController now
+    // We don't need to manage it directly on lock change here.
 
     // --- Show/Hide Pause Menu ---
     if (this.pauseMenuElement) {
       this.pauseMenuElement.style.display = isLocked ? "none" : "block";
     }
 
-    // Instructions are handled separately now
-    // this.setCrosshairVisible(isLocked); // PlayerController handles this based on aiming
-    this.setInstructionsVisible(!isLocked);
     if (!isLocked) {
       this.setVaultPromptVisible(false); // Hide vault prompt if lock is lost
       this.setCrosshairVisible(false); // Explicitly hide crosshair when lock lost
